@@ -17,6 +17,10 @@
       "default": "./dist/index.js"
     }
   },
+  "imports": {
+    "#lib": "./src/lib",
+    "#lib/*": "./src/lib/*"
+  },
   "files": [
     "dist",
     "src/lib"

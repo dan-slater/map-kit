@@ -35,6 +35,30 @@ bun add maplibre-gl
 The package imports MapLibre's own stylesheet, so there is nothing to add to
 your app CSS.
 
+### `dist` is committed
+
+**Installing needs no build step.** `dist/` is committed, so a git-tag install
+is a clone and nothing else: no `prepare` script, no build, no toolchain in
+your project beyond the peer dependencies.
+
+That is deliberate. A git dependency installs only its `dependencies`, never
+its `devDependencies`, so a `prepare` script that runs `svelte-package` cannot
+work in a consumer: the binary is not there. Package managers compound it. Bun
+blocks lifecycle scripts for untrusted dependencies by default, so the build
+is skipped silently and you get a package whose `exports` point at a `dist`
+that does not exist.
+
+The cost is that `dist` has to be rebuilt and committed whenever `src/lib`
+changes. `bun run check:dist` rebuilds and fails if the committed output is
+stale; run it before tagging.
+
+### Toolchain
+
+map-kit is built with SvelteKit 3 and Vite 8, and is consumed by SvelteKit 3
+apps. Because `dist` ships prebuilt, your app's Vite and Kit versions do not
+have to match map-kit's: the only hard requirements are the peers, `svelte ^5`
+and `maplibre-gl ^5`.
+
 ## Quick start
 
 ```svelte
@@ -496,8 +520,11 @@ bun install
 bun run check        # svelte-kit sync && svelte-check
 bun test             # unit tests for the geometry and the tile query
 bun run build        # svelte-package from src/lib to dist
+bun run check:dist   # rebuild and fail if the committed dist is stale
 bunx vite dev --host 127.0.0.1 --port 5180   # the demo app
 ```
+
+Commit `dist` with any change to `src/lib`. Consumers install it as-is.
 
 `tests/` covers `geo.ts` against independently computed WGS84 values, and the
 coastline stitcher against synthetic vector tiles that reproduce real clipping:

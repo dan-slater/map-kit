@@ -6,7 +6,7 @@
 		Map,
 		Overlay,
 		type OverlayFrame
-	} from '$lib/index.js';
+	} from '#lib/index.js';
 
 	/*
 	 * A real WebGPU overlay. It clears the canvas to a known colour and draws a

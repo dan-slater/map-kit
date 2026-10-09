@@ -1,36 +1,167 @@
 # HANDOVER
 
-Last updated: 2026-10-09, after step 1 follow-ups and the basemap theming pass.
+Last updated: 2026-10-09, after two upstream fixes from the surf-lab line.
 
 ## State
 
-`v0.1.0` is tagged and on GitHub; surf-lab pins `#semver:^0.1.0`. Everything
-since is unreleased 0.1.x work, recorded in `CHANGELOG.md` under 0.1.1.
-Additive only, so the tag can move when the control plane is ready.
+`v0.1.0` is tagged and on GitHub. Everything since is unreleased 0.1.x work,
+recorded in `CHANGELOG.md` under 0.1.1. **It is no longer purely additive**:
+`result.waterSide` now reads `'right'` where it read `'left'`, because the old
+label was wrong. Read the Fixed section of the changelog before tagging.
 
 Waiting on Daniel: **pick a basemap theme.** Four presets are rendered at three
 views each in `docs/img/themes/`. The demo switcher is live, so
 `http://127.0.0.1:5180/?theme=chart` flicks between them (`ink`, `paper`,
 `chart`, `mono`, `none`). The demo currently defaults to `ink`.
 
+## The two upstream fixes
+
+### 1. The coastline winding was documented backwards
+
+The surf-lab line was right. Water is on the **right** of a `coastlineNear`
+polyline, not the left. The geometry was always right-handed; only the label
+and the docs were wrong, so anyone trusting them read the opposite of what
+they got.
+
+Settled by measurement, not argument. `scripts/probe-winding.mjs` steps off
+each segment and asks the water polygons which side is wet:
+
+```
+J-Bay       water only on the LEFT: 0   only on the RIGHT: 60
+Nazare      water only on the LEFT: 0   only on the RIGHT: 45
+Bells Beach water only on the LEFT: 0   only on the RIGHT: 60
+```
+
+The signed area of the largest source ring is negative at all three, meaning
+OpenFreeMap winds its water rings clockwise in longitude and latitude, putting
+the interior on the right. The widespread assumption that vector tiles follow
+the OGC anticlockwise convention is simply not what OpenFreeMap serves.
+
+The side is now a **guarantee** rather than an inheritance. `coastlineNear`
+takes `waterSide: 'left' | 'right'` (default `'right'`), measures the source
+winding per query from the largest closed ring, and reverses the polylines if
+it does not match. `stats.detectedWaterSide` and `stats.reversed` report what
+happened. Against OpenFreeMap the default reverses nothing.
+
+Two things this shook out that are worth keeping:
+
+- Only a **closed** ring has an orientation. The first version measured the
+  shoelace sum of any ring, which is a meaningless number for an open
+  LineString and made a line-based water source report a bogus side.
+- The synthetic tiles in `tests/coastline.test.ts` were wound anticlockwise,
+  the opposite of the real tileset. They would have passed while the real
+  thing behaved differently. They are now wound like OpenFreeMap, and there is
+  a test that a tileset wound the other way is corrected rather than passed
+  through.
+
+`scripts/verify.mjs` now verifies the claim on every run rather than trusting
+it. The probe step is 5 m, not 50 m: it has to be smaller than the narrowest
+water or land the coastline wraps around, or it lands on the far bank. At
+Mundaka's estuary a 50 m step disagrees on 6 of 131 segments and a 5 m step on
+none.
+
+### 2. A git-tag install produced a package with no `dist`
+
+Reproduced in a scratch SvelteKit 3 app at `~/orch-scratch/mapkit-consumer`
+(Kit 3.0.1, Vite 8.3.4, vite-plugin-svelte 7.3.1). Installing the `v0.1.0` tag
+gave:
+
+```
+installed @dan-slater/map-kit@github:dan-slater/map-kit#13fac64
+Blocked 1 postinstall. Run `bun pm untrusted` for details.
+```
+
+`dist/` absent. Forcing the script with `bun pm trust` gave the real cause:
+
+```
+svelte-package: command not found
+error: prepare script from "@dan-slater/map-kit" exited with 127
+```
+
+**`prepare` can never work for a git dependency.** A git install resolves only
+`dependencies`, not `devDependencies`, so `@sveltejs/package` is not in the
+consumer's tree. Bun blocking untrusted lifecycle scripts by default just
+hides it one layer earlier. This was never really about Kit 3: it would have
+failed the same way under Kit 2 unless the consumer happened to have
+`svelte-package` hoisted.
+
+Fixed by committing `dist` and deleting `prepare`, so installing is a clone
+and nothing else. `bun run check:dist` rebuilds and fails if the committed
+output is stale; run it before tagging. `dist` is 236 KB over 37 files.
+
+map-kit was also moved to SvelteKit 3 and Vite 8 so it matches its consumer.
+That needed four migrations, each a Kit 3 breaking change:
+
+- `svelte.config.js` is no longer read; the config moved into the
+  `sveltekit()` Vite plugin, and without the old `kit` namespace.
+- `$lib` was removed in favour of `#lib`, which comes from a `"imports"` field
+  in `package.json`. The `alias` escape hatch works but is itself deprecated.
+- `.svelte-kit/tsconfig.json` is no longer generated. map-kit's `check` had
+  been passing only against a stale Kit 2 leftover, so a fresh clone would
+  have failed. `tsconfig.json` now extends `$app/tsconfig`, which pins
+  `types`, so `bun` has to be named there for `bun:test` to resolve.
+- `@sveltejs/package` 3, `adapter-static` 4.
+
+None of this reaches consumers: `dist` ships prebuilt, so a consumer's Kit and
+Vite versions are independent of map-kit's.
+
+**Proof it works.** In the scratch Kit 3 app, against the fixed commit:
+
+```
+bun add git+file:///home/danielslater/code/map-kit#f99f00a
+  -> installed, no blocked postinstall, dist present (37 files)
+bun run check  ->  198 FILES 0 ERRORS 0 WARNINGS
+```
+
+and driven headless at `http://127.0.0.1:5184/`:
+
+```
+status: map-ready        (<Map onready> fired)
+canvases: 1              (MapLibre canvas rendered)
+pins: 1                  (<Pins> rendered)
+pinFill: rgb(255,122,89) (the ink theme's coral reached the pin)
+bg: rgb(3,7,12)          (--mk-map-background from the theme)
+errors: none
+```
+
+Screenshot at `~/orch-scratch/consumer-map.png`: the ink globe over southern
+Africa with the coral pin at J-Bay.
+
+A `git+file://` URL was used because the fix is not pushed yet. It exercises
+the identical code path in bun (clone the repo, no build, use the committed
+`dist`); only the remote differs. The `github:` form needs the push.
+
 ## Latest verification
 
 All run on this box on 2026-10-09, after the last commit.
 
 ```
-bun run check    ->  346 FILES 0 ERRORS 0 WARNINGS
-bun test         ->  71 pass, 0 fail, 367 expect() calls
-bun run build    ->  src/lib -> dist
-bunx publint     ->  All good!
-bun scripts/verify.mjs            ->  RESULT: pass
-bun scripts/verify-webgpu.ts --no-warm  ->  RESULT: pass (18 checks)
+bun run check     ->  361 FILES 0 ERRORS 0 WARNINGS
+bun test          ->  76 pass, 0 fail, 265 expect() calls
+bun run build     ->  src/lib -> dist
+bun run check:dist->  clean
+bunx publint      ->  All good!
+bun scripts/verify.mjs  ->  RESULT: pass, water verified on the right
+                            60/60, 45/45 and 60/60 sampled segments
 ```
 
 Demo on `127.0.0.1:5180` in tmux `mapkit-dev`, log at
-`~/orch-scratch/mapkit-dev.log`.
+`~/orch-scratch/mapkit-dev.log`. Scratch consumer in tmux `mapkit-consumer`.
 
-`coastlineNear` is unchanged by this round of work and still returns, at zoom
-14 with a 2 km radius and `classes: ['ocean']`:
+**`scripts/verify-webgpu.ts` cannot currently complete on this box, and it is
+not map-kit's doing.** Under the Vulkan flags, MapLibre's own WebGL fragment
+shader fails to compile (`Could not compile fragment shader`), which kills the
+basemap on every route including `/`, so the overlay never reaches ready. On
+`--swiftshader` the same build gets a real `GPUDevice` with working queue and
+limits, which is what says the `<Overlay>` code is fine; that run then trips a
+separate swiftshader quirk on buffer readback (`A valid external Instance
+reference no longer exists`). The GPU path passed in full this morning with
+unchanged overlay code. The GPU itself is idle (219 MiB used, 1 percent), so
+this looks like driver or ANGLE state on the shared box. Worth re-running
+before anyone relies on the WebGPU path.
+
+`coastlineNear` output is unchanged by this work, at zoom 14, 2 km radius,
+`classes: ['ocean']`:
 
 | Place | Polylines | Longest | Vertices | Span |
 | --- | --- | --- | --- | --- |
@@ -168,14 +299,19 @@ bathymetry either. No preset uses it, and a test asserts none does. The
 1. **Daniel picks a theme.** Then make it the demo default and say so in the
    README. If none of the four land, the quickest lever is a copy of `paper`
    or `ink` with different `water`, `land` and `coastline`.
-2. **Tag 0.1.1** once the theme is settled, so surf-lab gets the adapter retry
-   and `gpuUsage`. Needs the control plane; `git push` is denied here.
-3. **`<Pins>` at scale** is still DOM-based, fine for tens or low hundreds.
+2. **Push and tag 0.1.1.** surf-lab needs it for the installable `dist` and the
+   corrected winding label. Needs the control plane; `git push` is denied here.
+   The winding label change is not backwards compatible, so the tag note should
+   say so.
+3. **Re-run `scripts/verify-webgpu.ts` on the GPU path** once the box's
+   ANGLE/Vulkan state is healthy again. Nothing in map-kit changed, but the
+   full GPU proof is currently stale.
+4. **`<Pins>` at scale** is still DOM-based, fine for tens or low hundreds.
    A client map with thousands of competitor pins wants the `<Layer>` route,
    which is documented but not demonstrated.
-4. **Clustering is undemonstrated.** `<Layer>` passes `cluster: true` through
+5. **Clustering is undemonstrated.** `<Layer>` passes `cluster: true` through
    to the source, but nothing in the demo or docs shows it working.
-5. **Nazaré still returns 19 polylines.** The dominant one is 2894 m and
+6. **Nazaré still returns 19 polylines.** The dominant one is 2894 m and
    usable. A 2 km circle there holds breakwaters, a harbour mouth and a river,
    so the fragments may be real. Worth confirming against surf-lab before
    tuning further.

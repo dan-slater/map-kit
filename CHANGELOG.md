@@ -64,6 +64,16 @@ read the Fixed entry before upgrading.
 ### Changed
 
 - `result.waterSide` reads `'right'` rather than `'left'`. See Fixed.
+- `dist` is committed and the `prepare` script is gone. `files` is unchanged.
+  New `bun run check:dist` rebuilds and fails if the committed output is
+  stale; run it before tagging.
+- map-kit itself is built with SvelteKit 3 and Vite 8. `svelte.config.js` is
+  gone (Kit 3 removed it; the config moved into the `sveltekit()` Vite
+  plugin), the demo uses `#lib` rather than the removed `$lib`, and
+  `tsconfig.json` extends `$app/tsconfig`, since Kit 3 no longer writes
+  `.svelte-kit/tsconfig.json`. None of this reaches consumers, because `dist`
+  ships prebuilt: a consumer's Kit and Vite versions are independent of
+  map-kit's.
 - The `chart` preset no longer tints inland water lighter than the sea. It
   read as shallows, and OpenMapTiles has no depth data behind it. The theme
   option that does the split is still there for anyone who wants lakes
@@ -72,6 +82,15 @@ read the Fixed entry before upgrading.
 
 ### Fixed
 
+- **A git-tag install produced a package with no `dist`.** Up to 0.1.0 the
+  `prepare` script built `dist` on install. That cannot work: a git dependency
+  installs only its `dependencies`, so `svelte-package` (a devDependency) is
+  not present in the consumer, and `bun pm trust` surfaced it as
+  `svelte-package: command not found`. Before even reaching that, bun blocks
+  lifecycle scripts for untrusted dependencies by default, so the build was
+  skipped silently and `exports` pointed at a `dist` that did not exist.
+  `dist` is now committed and `prepare` is gone, so installing is a clone and
+  nothing else. Reported by the surf-lab line against SvelteKit 3.
 - **`coastlineNear` documented the wrong side for the water.** Up to 0.1.0 the
   docs and `result.waterSide` said water lay to the left of a polyline's
   direction of travel. It is the right: OpenFreeMap's water rings run

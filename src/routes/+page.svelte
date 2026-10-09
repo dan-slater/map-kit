@@ -19,7 +19,7 @@
 		type MapStyleName,
 		type OverlayFrame,
 		type Pin
-	} from '$lib/index.js';
+	} from '#lib/index.js';
 
 	type SpotProps = {
 		name: string;
