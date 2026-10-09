@@ -1,0 +1,88 @@
+/*
+ * map-kit design tokens.
+ *
+ * Every colour, radius, size and font the components use reads from one of
+ * these custom properties. The defaults below are declared through :where() so
+ * they carry zero specificity: a single `:root { --mk-color-accent: ... }` in
+ * your own stylesheet wins, wherever it sits in the cascade.
+ *
+ * Scope them to a subtree instead of :root if you want two differently themed
+ * maps on one page.
+ *
+ * The full list is documented in docs/theming.md.
+ */
+
+:where(:root) {
+	/* Typography */
+	--mk-font-family:
+		system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+	--mk-font-family-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	--mk-font-size-sm: 0.8125rem;
+	--mk-font-size-md: 0.9375rem;
+	--mk-font-size-lg: 1.125rem;
+	--mk-font-weight-normal: 400;
+	--mk-font-weight-medium: 550;
+	--mk-font-weight-bold: 700;
+	--mk-line-height: 1.45;
+
+	/* Palette */
+	--mk-color-surface: #ffffff;
+	--mk-color-surface-muted: #f4f5f7;
+	--mk-color-text: #14161a;
+	--mk-color-text-muted: #5c6370;
+	--mk-color-border: #d8dbe0;
+	--mk-color-accent: #1f6feb;
+	--mk-color-accent-contrast: #ffffff;
+	--mk-color-scrim: rgb(10 12 16 / 0.35);
+	--mk-color-focus: #1f6feb;
+
+	/* Pins */
+	--mk-color-pin: #1f6feb;
+	--mk-color-pin-stroke: #ffffff;
+	--mk-color-pin-hover: #2f81f7;
+	--mk-color-pin-selected: #e3663e;
+	--mk-color-pin-label: #14161a;
+	--mk-pin-size: 28px;
+	--mk-pin-stroke-width: 2px;
+	--mk-pin-hover-scale: 1.12;
+	--mk-pin-selected-scale: 1.2;
+	--mk-pin-occluded-opacity: 0;
+
+	/* Shape */
+	--mk-radius-sm: 4px;
+	--mk-radius-md: 8px;
+	--mk-radius-lg: 14px;
+	--mk-radius-pill: 999px;
+
+	/* Spacing */
+	--mk-space-1: 4px;
+	--mk-space-2: 8px;
+	--mk-space-3: 12px;
+	--mk-space-4: 18px;
+	--mk-space-5: 28px;
+
+	/* Elevation */
+	--mk-shadow-1: 0 1px 2px rgb(10 12 16 / 0.12);
+	--mk-shadow-2: 0 10px 30px rgb(10 12 16 / 0.18);
+
+	/* Panel */
+	--mk-panel-width: 340px;
+	--mk-panel-background: var(--mk-color-surface);
+	--mk-panel-inset: var(--mk-space-3);
+	--mk-sheet-max-height: 60vh;
+
+	/* Motion. Set --mk-duration to 0ms to switch animation off. */
+	--mk-duration: 180ms;
+	--mk-easing: cubic-bezier(0.2, 0, 0.1, 1);
+
+	/* Stacking inside the map container */
+	--mk-z-overlay: 1;
+	--mk-z-pin: 2;
+	--mk-z-panel: 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:where(:root) {
+		--mk-duration: 0ms;
+	}
+}
