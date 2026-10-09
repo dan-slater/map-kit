@@ -17,6 +17,10 @@ move up without touching their code.
   zoom-interpolated colour keeps its stops and its interpolation, and alpha is
   carried over. The theme also sets the globe's atmosphere, and can add a
   coastline hairline, which the stock styles do not have.
+  A theme only touches the OpenMapTiles groups it recognises; every other
+  layer, including a consumer's own and any source-layer OpenMapTiles adds
+  later, is passed through untouched rather than recoloured by guesswork or
+  dropped.
 - Four presets in `themes`: `ink`, `paper`, `chart` and `mono`. Each carries
   matching `--mk-` overrides, which `tokensFor(theme)` returns as a CSS
   declaration list so the pins and panel follow the basemap.
@@ -46,6 +50,14 @@ move up without touching their code.
   reproduce real tile clipping.
 - A `/webgpu` route in the demo app, and `scripts/verify-webgpu.ts`, which
   drives it on real hardware and reads pixels back off the GPU.
+
+### Changed (within unreleased 0.1.1)
+
+- The `chart` preset no longer tints inland water lighter than the sea. It
+  read as shallows, and OpenMapTiles has no depth data behind it. The theme
+  option that does the split is still there for anyone who wants lakes
+  distinct from the sea, renamed from `waterShallow` to `waterInland` so the
+  name says what it is. No preset uses it.
 
 ### Fixed
 

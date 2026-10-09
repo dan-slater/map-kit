@@ -22,12 +22,15 @@ export type BasemapTheme = {
 	/** Oceans, lakes and rivers. */
 	water: string;
 	/**
-	 * Inland water, when you want it distinct from the ocean. Tints anything
-	 * whose `class` is not `ocean`, which is what gives a chart its pale
-	 * shallows. OpenMapTiles carries no depth, so this is a class split rather
-	 * than real bathymetry.
+	 * Lakes, ponds and reservoirs, when you want them distinct from the sea.
+	 * Tints anything whose `class` is not `ocean`.
+	 *
+	 * This is a split by feature class, nothing more. OpenMapTiles carries no
+	 * depth at all, so do not use it to suggest shallows or bathymetry: a
+	 * viewer reading a lighter band as shallow water would be reading
+	 * something that is not in the data.
 	 */
-	waterShallow?: string | null;
+	waterInland?: string | null;
 	/** Rivers and streams drawn as lines. Defaults to `water`. */
 	waterway?: string | null;
 	/** The ground, and the colour behind everything. */
@@ -170,7 +173,10 @@ export function themeStyle(style: StyleSpecification, theme: BasemapTheme): Styl
 	const waterSource = firstVectorSource(next);
 	const out: AnyLayer[] = [];
 
-	for (const original of next.layers as AnyLayer[]) {
+	// A style with no layers is unusual but not an error: it still gets a sky.
+	const layers: AnyLayer[] = Array.isArray(next.layers) ? (next.layers as AnyLayer[]) : [];
+
+	for (const original of layers) {
 		const layer = themeLayer(original, theme);
 		if (layer) out.push(layer);
 
@@ -234,6 +240,14 @@ function coastlineLayer(theme: BasemapTheme, source: string): AnyLayer {
 /** Returns the themed layer, or null to drop it from the style. */
 function themeLayer(layer: AnyLayer, theme: BasemapTheme): AnyLayer | null {
 	const group = groupOf(layer);
+
+	// A layer this function does not recognise is passed through untouched,
+	// including its own paint and layout objects. Themes only ever change the
+	// OpenMapTiles groups they know about, so a consumer's own layers, a
+	// custom source, or a future OpenMapTiles layer all survive a theme
+	// unchanged rather than being recoloured by guesswork or dropped.
+	if (group === 'other') return layer;
+
 	const paint = { ...(layer.paint ?? {}) };
 	const layout = { ...(layout_(layer) ?? {}) };
 	const next: AnyLayer = { ...layer, paint, layout };
@@ -253,8 +267,8 @@ function themeLayer(layer: AnyLayer, theme: BasemapTheme): AnyLayer | null {
 			return next;
 
 		case 'water':
-			paint['fill-color'] = theme.waterShallow
-				? ['match', ['get', 'class'], 'ocean', theme.water, theme.waterShallow]
+			paint['fill-color'] = theme.waterInland
+				? ['match', ['get', 'class'], 'ocean', theme.water, theme.waterInland]
 				: theme.water;
 			return next;
 
@@ -320,6 +334,8 @@ function themeLayer(layer: AnyLayer, theme: BasemapTheme): AnyLayer | null {
 			return themeLabel(next, paint, layout, theme, theme.labelText);
 
 		default:
+			// Unreachable: 'other' returned early. Kept so adding a group to the
+			// union is a type error here rather than a silent pass-through.
 			return next;
 	}
 }

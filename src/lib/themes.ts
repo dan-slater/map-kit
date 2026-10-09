@@ -94,10 +94,16 @@ export const paper: BasemapTheme = {
 	}
 };
 
-/** Nautical chart: cream land, pale cyan water, dark navy coast, spaced caps. */
+/**
+ * Nautical chart: cream land, pale cyan water, dark navy coast, spaced caps.
+ *
+ * All water is one colour on purpose. An earlier version tinted inland water
+ * lighter, which read as shallows, and OpenMapTiles has no depth data behind
+ * that. The chart feel comes from the coast line, the dashed boundaries and
+ * the lettering instead.
+ */
 export const chart: BasemapTheme = {
 	water: '#cfe9ef',
-	waterShallow: '#eaf7fa',
 	waterway: '#9fd0dd',
 	land: '#f7f0dc',
 	landLow: '#f2ead3',

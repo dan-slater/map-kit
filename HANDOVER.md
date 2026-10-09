@@ -18,8 +18,8 @@ views each in `docs/img/themes/`. The demo switcher is live, so
 All run on this box on 2026-10-09, after the last commit.
 
 ```
-bun run check    ->  345 FILES 0 ERRORS 0 WARNINGS
-bun test         ->  39 pass, 0 fail, 259 expect() calls
+bun run check    ->  346 FILES 0 ERRORS 0 WARNINGS
+bun test         ->  71 pass, 0 fail, 367 expect() calls
 bun run build    ->  src/lib -> dist
 bunx publint     ->  All good!
 bun scripts/verify.mjs            ->  RESULT: pass
@@ -107,7 +107,14 @@ Two things the real run produced:
 ### 3. Basemap theming
 
 `src/lib/theme.ts` (`themeStyle`, `tokensFor`) and `src/lib/themes.ts` (the
-four presets). `<Map theme={...}>` applies it.
+four presets). `<Map theme={...}>` applies it. `tests/theme.test.ts` covers
+all of it, including a hand-written theme rather than a preset.
+
+**A theme only touches the OpenMapTiles groups it recognises.** Everything
+else is returned exactly as it came in, paint and layout objects included: a
+consumer's own layers on their own sources, and any source-layer OpenMapTiles
+adds later. That is asserted against every preset, `mono` included, so a theme
+that hides almost the whole basemap still leaves a consumer's data alone.
 
 Colours are rewritten inside whatever expression the style already uses, so a
 zoom-interpolated colour keeps its stops and its interpolation shape and only
@@ -138,6 +145,13 @@ Three things worth knowing:
 400 KB budget (largest is 328 KB). The demo reads `?theme=` and writes it back
 to the URL.
 
+**`chart` no longer tints inland water lighter than the sea** (control plane,
+2026-10-09): it read as shallows and OpenMapTiles has no depth behind it. The
+option that does the split survives for anyone who wants lakes distinct from
+the sea, renamed `waterShallow` to `waterInland` so the name cannot imply
+bathymetry either. No preset uses it, and a test asserts none does. The
+`chart` screenshots have been re-rendered.
+
 ## Decisions taken (from the control plane)
 
 - No cluster mode in `<Pins>`. Large sets go through `<Layer>` with a GeoJSON
@@ -147,6 +161,7 @@ to the URL.
   not need a land mask.
 - `coastlineNear` stays a pure query. The caller flies first; the two-line
   example stays in the docs.
+- No depth implied anywhere. `chart` shows all water in one colour.
 
 ## What is next
 
@@ -164,18 +179,11 @@ to the URL.
    usable. A 2 km circle there holds breakwaters, a harbour mouth and a river,
    so the fragments may be real. Worth confirming against surf-lab before
    tuning further.
-6. **`themeStyle` has no unit tests.** The colour parser and the
-   expression-preserving recolour are pure functions and deserve the same
-   treatment `geo.ts` got. They are currently only checked by eye in the
-   screenshots.
 
 ## Open questions for Daniel
 
 - Which theme, and does the chosen one want a tweak before it becomes the
   default?
-- `chart` tints inland water lighter than ocean via `properties.class`. It
-  reads as shallows, but it is not depth. Is that the right call, or should
-  the preset drop the effect rather than imply bathymetry?
 
 ## Box notes
 

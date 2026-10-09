@@ -383,7 +383,7 @@ list, so it drops straight into a `style` attribute.
 | --- | --- |
 | `ink` | Deep navy ocean, near-black land, a teal coastline glow and coral pins. Sparse cool-grey labels. For a dark product UI. |
 | `paper` | Warm off-white land, pale blue-grey water, hairline ink coasts, italic labels, faint shaded relief. Editorial. |
-| `chart` | Nautical chart: cream land, pale cyan water tinted lighter inland, navy coast and dashed boundaries, spaced capitals. |
+| `chart` | Nautical chart: cream land, pale cyan water, navy coast and dashed boundaries, spaced capitals. |
 | `mono` | One dark, one light, nothing else. No roads, no labels, no atmosphere. Reads as a graphic. |
 
 ```svelte
@@ -400,7 +400,7 @@ See them at `docs/img/themes/`, three views each.
 | Token | Meaning |
 | --- | --- |
 | `water` | Oceans, lakes and rivers. |
-| `waterShallow` | Tints water whose `class` is not `ocean`. OpenMapTiles carries no depth, so this is a class split, not bathymetry. |
+| `waterInland` | Tints lakes, ponds and reservoirs, anything whose `class` is not `ocean`. A split by feature class, nothing more: OpenMapTiles carries no depth, so do not use it to suggest shallows. No preset uses it. |
 | `waterway` | Rivers drawn as lines. Defaults to `water`. |
 | `land` | The ground, and the colour behind everything. |
 | `landLow` | Natural cover: wood, grass, sand, ice. |
@@ -427,6 +427,13 @@ Colours are rewritten inside whatever expression the style already uses, so a
 zoom-interpolated colour keeps its stops and its interpolation and only the
 colour at each stop changes. Alpha is carried over, so layers the style
 deliberately made faint stay faint.
+
+**A theme only touches the OpenMapTiles groups it knows.** Any other layer is
+passed through exactly as it was: your own layers on your own sources, a layer
+on a source-layer OpenMapTiles adds in future, anything. So you can add a
+`<Layer>` of your own and a theme will not recolour it out from under you, and
+a theme that hides almost everything, like `mono`, still leaves your data
+visible.
 
 **On fonts.** OpenFreeMap serves only `Noto Sans Regular`, `Noto Sans Italic`
 and `Noto Sans Bold`. Naming anything else gives you blank labels, so `chart`
