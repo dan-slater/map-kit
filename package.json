@@ -27,7 +27,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "svelte-package -i src/lib -o dist",
-    "prepare": "svelte-package -i src/lib -o dist",
+    "check:dist": "svelte-package -i src/lib -o dist && git diff --exit-code -- dist",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "bun test",
     "demo:build": "vite build"
@@ -37,19 +37,19 @@
     "svelte": "^5"
   },
   "devDependencies": {
-    "@sveltejs/adapter-static": "^3.0.9",
-    "@sveltejs/kit": "^2.46.4",
-    "@sveltejs/package": "^2.5.4",
-    "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "@sveltejs/adapter-static": "^4.0.0",
+    "@sveltejs/kit": "^3.0.1",
+    "@sveltejs/package": "^3.0.0",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@types/bun": "^1.4.2",
     "@types/geojson": "^7946.0.16",
     "@webgpu/types": "^0.1.74",
     "maplibre-gl": "^5.9.0",
     "playwright": "^1.64.0",
     "publint": "^0.3.14",
-    "svelte": "^5.42.2",
-    "svelte-check": "^4.3.3",
+    "svelte": "^5.57.2",
+    "svelte-check": "^4.7.6",
     "typescript": "^5.9.3",
-    "vite": "^7.1.9"
+    "vite": "^8.3.4"
   }
 }
