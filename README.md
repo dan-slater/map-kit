@@ -331,9 +331,13 @@ coast.polylines[0].lengthMeters;
 coast.frame.toLonLat(x, y); // back to geography
 ```
 
-Walking a polyline from index 0, **water is on the left**. Zoom 13 to 15 gives
-useful detail; zoom 14 is the deepest OpenFreeMap serves for this layer. At
-J-Bay, zoom 14, 2 km radius, it returns one 4332 m polyline of 133 vertices.
+Walking a polyline from index 0, **water is on the right**, which is what
+OpenFreeMap's winding gives. Pass `waterSide: 'left'` for the opposite and
+every polyline comes back reversed; either way `result.waterSide` states what
+you got, and it is a guarantee rather than an observation, measured per query
+from the source geometry. Zoom 13 to 15 gives useful detail; zoom 14 is the
+deepest OpenFreeMap serves for this layer. At J-Bay, zoom 14, 2 km radius, it
+returns one 4332 m polyline of 133 vertices.
 
 It handles the two things that make this harder than it looks: vector tiles
 invent straight clip edges that are not coastline, and removing them leaves

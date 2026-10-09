@@ -6,11 +6,21 @@ Consumed by git tag, so every release here is also a tag on `main`.
 
 ## 0.1.1
 
-Additive only. Nothing from 0.1.0 changed shape, so an existing consumer can
-move up without touching their code.
+Mostly additive, with one correction that matters: `coastlineNear` reported
+the wrong side for the water. The geometry is unchanged, but
+`result.waterSide` now reads `'right'` where it used to read `'left'`. Anyone
+who trusted the old label was getting the opposite of what they were told, so
+read the Fixed entry before upgrading.
 
 ### Added
 
+- `coastlineNear` takes a `waterSide` option, `'right'` (default) or
+  `'left'`, and the side is now a guarantee rather than an observation. Each
+  query measures the winding of the source from the signed area of the
+  largest closed ring it read, and reverses the polylines when that does not
+  match what was asked for, so the contract holds against a tileset that winds
+  the other way. `stats.detectedWaterSide` and `stats.reversed` report what
+  happened. The default matches OpenFreeMap, so it reverses nothing.
 - **Basemap theming.** `themeStyle(style, theme)` recolours an OpenMapTiles
   style from a small token set, and `<Map theme={...}>` applies it. Colours are
   rewritten inside whatever expression the style already uses, so a
@@ -51,8 +61,9 @@ move up without touching their code.
 - A `/webgpu` route in the demo app, and `scripts/verify-webgpu.ts`, which
   drives it on real hardware and reads pixels back off the GPU.
 
-### Changed (within unreleased 0.1.1)
+### Changed
 
+- `result.waterSide` reads `'right'` rather than `'left'`. See Fixed.
 - The `chart` preset no longer tints inland water lighter than the sea. It
   read as shallows, and OpenMapTiles has no depth data behind it. The theme
   option that does the split is still there for anyone who wants lakes
@@ -61,14 +72,21 @@ move up without touching their code.
 
 ### Fixed
 
+- **`coastlineNear` documented the wrong side for the water.** Up to 0.1.0 the
+  docs and `result.waterSide` said water lay to the left of a polyline's
+  direction of travel. It is the right: OpenFreeMap's water rings run
+  clockwise in longitude and latitude, not anticlockwise as the OGC convention
+  would suggest. Measured with the new `scripts/probe-winding.mjs`, which
+  steps off each segment and asks the water polygons: 165 of 165 segments at
+  J-Bay, Nazaré and Bells Beach have water on the right. The geometry never
+  changed, only the label was wrong, so code written against the old label was
+  reading the opposite of what it got. Reported by the surf-lab line.
 - `--mk-panel-background` and `--mk-panel-inset` were declared at `:root` as
   aliases of `--mk-color-surface` and `--mk-space-3`. A custom property whose
   value is `var(--other)` resolves on the element it is declared on, so those
   aliases froze to the `:root` values and ignored any override further down
   the tree: setting `--mk-color-surface` on a wrapper left the panel white.
   `<Panel>` now writes the fallback at the point of use instead.
-
-### Changed
 
 - `<Overlay mode="webgpu">` now sizes the canvas before configuring the
   context rather than after. WebGPU takes the swap-chain size from the canvas
@@ -82,6 +100,8 @@ move up without touching their code.
   `bgra8unorm` on many other platforms.
 - README notes that `<Pins>` is DOM-based with no clustering, and that large
   sets belong in a `<Layer>` with a GeoJSON source.
+- `docs/coastline.md` explains the winding, how it was measured, and why the
+  side is now guaranteed rather than inherited from the tileset.
 
 ## 0.1.0
 

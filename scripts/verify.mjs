@@ -90,8 +90,76 @@ for (const place of PLACES) {
 			};
 		};
 
+		// Does the water really sit where coast.waterSide says? Step off each
+		// segment and ask the water polygons, rather than trusting the label.
+		// This is the check that caught the 0.1.0 documentation being the
+		// wrong way round.
+		//
+		// The step is 5 m. It has to be smaller than the narrowest water or
+		// land the coastline wraps around, or the probe lands on the far bank
+		// and reports the wrong side: at Mundaka's estuary a 50 m step
+		// disagrees on 6 of 131 segments and a 5 m step on none.
+		const waterSideCheck = (() => {
+			const polygons = [];
+			for (const id of Object.keys(map.getStyle().sources)) {
+				let features = [];
+				try {
+					features = map.querySourceFeatures(id, { sourceLayer: 'water' });
+				} catch {
+					continue;
+				}
+				for (const feature of features) {
+					if (String(feature.properties?.class ?? '') !== 'ocean') continue;
+					const g = feature.geometry;
+					if (g.type === 'Polygon') polygons.push(g.coordinates);
+					else if (g.type === 'MultiPolygon') for (const p of g.coordinates) polygons.push(p);
+				}
+			}
+			const inRing = (ring, x, y) => {
+				let inside = false;
+				for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+					const xi = ring[i][0];
+					const yi = ring[i][1];
+					const xj = ring[j][0];
+					const yj = ring[j][1];
+					if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+				}
+				return inside;
+			};
+			const inWater = (plon, plat) =>
+				polygons.some(
+					(rings) => rings.reduce((n, r) => n + (inRing(r, plon, plat) ? 1 : 0), 0) % 2 === 1
+				);
+
+			const line = coast.polylines[0];
+			let sampled = 0;
+			let agree = 0;
+			for (let k = 1; k < line.points.length && sampled < 60; k++) {
+				const a = line.points[k - 1];
+				const b = line.points[k];
+				const dx = b[0] - a[0];
+				const dy = b[1] - a[1];
+				const length = Math.hypot(dx, dy);
+				if (length < 10) continue;
+				const mx = (a[0] + b[0]) / 2;
+				const my = (a[1] + b[1]) / 2;
+				// Normal towards the side the result claims the water is on.
+				const sign = coast.waterSide === 'right' ? 1 : -1;
+				const nx = (sign * dy) / length;
+				const ny = (-sign * dx) / length;
+				const step = 5;
+				const [wlon, wlat] = coast.frame.toLonLat(mx + nx * step, my + ny * step);
+				const [olon, olat] = coast.frame.toLonLat(mx - nx * step, my - ny * step);
+				sampled++;
+				if (inWater(wlon, wlat) && !inWater(olon, olat)) agree++;
+			}
+			return { sampled, agree };
+		})();
+
 		return {
 			stats: coast.stats,
+			waterSide: coast.waterSide,
+			waterSideCheck,
 			count: coast.polylines.length,
 			lines: coast.polylines.slice(0, 3).map(summarise),
 			// Round-trip the first vertex through the frame to prove the inverse.
@@ -122,6 +190,21 @@ for (const place of PLACES) {
 			`bridge=${result.stats.bridgeMeters.toFixed(1)} m ` +
 			`bridgedGaps=${result.stats.bridgedGaps}`
 	);
+	console.log(
+		`  waterSide=${result.waterSide} ` +
+			`detected=${result.stats.detectedWaterSide} reversed=${result.stats.reversed}`
+	);
+	console.log(
+		`  water verified on the ${result.waterSide} for ` +
+			`${result.waterSideCheck.agree}/${result.waterSideCheck.sampled} sampled segments`
+	);
+	if (
+		result.waterSideCheck.sampled < 10 ||
+		result.waterSideCheck.agree !== result.waterSideCheck.sampled
+	) {
+		console.log('  FAIL: the water is not on the side the result claims');
+		failures++;
+	}
 	console.log(`  polylines=${result.count} vertices=${result.stats.vertexCount}`);
 	for (const [i, line] of result.lines.entries()) {
 		console.log(

@@ -52,21 +52,49 @@ nothing else.
 
 ## Direction carries meaning
 
-Walking a polyline from index 0, **water is on the left and land on the
-right.** OpenMapTiles follows the OGC winding convention, and this function
-never reverses a segment, so the winding survives into the output. That is how
-you work out which way the sea faces without a second query:
+Walking a polyline from index 0, **water is on the right and land on the
+left**, by default. That is how you work out which way the sea faces without a
+second query:
 
 ```ts
-// Outward normal of the shore at vertex i, pointing into the water.
+// Unit normal pointing into the water, at vertex i.
 const [x0, y0] = line.points[i];
 const [x1, y1] = line.points[i + 1];
 const length = Math.hypot(x1 - x0, y1 - y0);
-const seaward = [-(y1 - y0) / length, (x1 - x0) / length];
+const seaward = [(y1 - y0) / length, -(x1 - x0) / length];
 ```
 
-`result.waterSide` states this in the return value so the assumption is visible
-in code rather than only in a doc.
+Pass `waterSide: 'left'` for the opposite convention and every polyline comes
+back reversed. `result.waterSide` always states which you got.
+
+### Why right, and why you can rely on it
+
+Right is simply what OpenFreeMap's data gives. Its water rings run clockwise
+in longitude and latitude, which puts the polygon interior on the right of the
+direction of travel. There is a widespread assumption that vector tiles follow
+the OGC convention of anticlockwise exteriors, which would put water on the
+left; measured against the real tiles, that is not what comes out.
+`scripts/probe-winding.mjs` is the measurement: it steps 50 m off each side of
+every segment and asks which side falls inside an ocean polygon. At J-Bay,
+Nazaré and Bells Beach it is 165 segments out of 165 with the water on the
+right.
+
+> Versions up to 0.1.0 documented this as "left" and set `waterSide: 'left'`
+> in the result. The geometry was always right-handed; only the label was
+> wrong. If you wrote code against the old label, it was reading the opposite
+> of what it got.
+
+The side is a guarantee rather than an observation. Each query measures the
+winding of the source itself, from the signed area of the largest closed ring
+it read, and reverses the polylines if that does not match the side you asked
+for. So the contract holds even against a tileset that winds the other way.
+`stats.detectedWaterSide` reports what the source did and `stats.reversed`
+whether anything had to be flipped; against OpenFreeMap with the default they
+read `'right'` and `false`, so the default costs nothing.
+
+A source layer of lines rather than polygons has no interior and no
+orientation, so `stats.detectedWaterSide` is `null` there and nothing is
+reversed.
 
 ## Measured output
 
@@ -133,6 +161,7 @@ off if you would rather see the raw pieces.
 | `simplifyMeters` | `0` | Ramer-Douglas-Peucker tolerance applied per polyline. |
 | `snapMeters` | `0.5` | Vertices this close count as the same point when chaining. |
 | `minLengthMeters` | `0` | Drop polylines shorter than this. |
+| `waterSide` | `'right'` | Which side of the direction of travel the water must end up on. `'left'` reverses every polyline. |
 | `dropTileEdges` | `true` | Remove vector-tile clip edges. |
 | `tileEdgeBand` | `0.1` | How far from a boundary, in tiles, a clip line may sit. |
 | `tileEdgeMinCount` | `3` | Segments that must share an offset for it to count. |
@@ -157,7 +186,8 @@ coast.stats;
 //   bridgeMeters: 79.2, bridgedGaps: 1,
 //   duplicateSegments: 4,
 //   vertexCount: 137,
-//   settled: true
+//   settled: true,
+//   detectedWaterSide: 'right', reversed: false
 // }
 ```
 

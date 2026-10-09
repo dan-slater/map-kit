@@ -86,10 +86,14 @@ const ORIGIN_LON_LAT = toLonLat(ORIGIN);
 /**
  * One tile's clipped ocean polygon.
  *
- * The shore is the western edge; the ring then runs east along the southern
- * clip line, north up the eastern clip line, and west along the northern clip
- * line to close. Walking the shore southwards leaves the water on the left,
- * which is the OGC winding a real tileset uses.
+ * The shore is the western edge; the ring also runs along the southern,
+ * eastern and northern clip lines.
+ *
+ * The ring is wound to match what OpenFreeMap actually serves, measured with
+ * `scripts/probe-winding.mjs`: clockwise in longitude and latitude, so the
+ * water enclosed by the ring sits to the **right** of the direction of
+ * travel. Winding it the other way, as an earlier version of this fixture
+ * did, would make these tests pass while the real thing behaved differently.
  *
  * `jitterTiles` shifts this tile's copy of the shore sideways, standing in for
  * the independent simplification each tile really does.
@@ -103,12 +107,13 @@ function clippedTile(tileRow: number, jitterTiles: number, stepTiles = 0.02): Ge
 	for (let v = vTop; v < vBottom; v += stepTiles) shore.push([shoreU(v) + jitterTiles, v]);
 	shore.push([shoreU(vBottom) + jitterTiles, vBottom]);
 
-	return polygonFeature([
+	const anticlockwise: TilePoint[] = [
 		...shore,
 		[uEast, vBottom], // clip edge, offset +64 in v
 		[uEast, vTop], // clip edge, offset +64 in u
 		shore[0] // clip edge, offset -64 in v
-	]);
+	];
+	return polygonFeature(anticlockwise.reverse());
 }
 
 /** The three-tile fixture: one shore, cut up and buffered the way tiles do it. */
@@ -218,13 +223,15 @@ describe('seam bridging', () => {
 		const [, seamY] = frame.toMeters(tileToLon(shoreU(8000)), tileToLat(8000));
 		const halfBuffer = BUFFER * result.stats.tileWidthMeters;
 
-		// Walking south through the seam, y must decrease monotonically: a bad
-		// join would double back into the overlap.
+		// Crossing the seam, y must move monotonically in whichever direction
+		// the chain runs: a bad join would double back into the overlap.
 		const points = result.polylines[0].points;
 		const nearSeam = points.filter(([, y]) => Math.abs(y - seamY) < 3 * halfBuffer);
 		expect(nearSeam.length).toBeGreaterThan(2);
+		const rising = nearSeam[nearSeam.length - 1][1] > nearSeam[0][1];
 		for (let i = 1; i < nearSeam.length; i++) {
-			expect(nearSeam[i][1]).toBeLessThan(nearSeam[i - 1][1]);
+			if (rising) expect(nearSeam[i][1]).toBeGreaterThan(nearSeam[i - 1][1]);
+			else expect(nearSeam[i][1]).toBeLessThan(nearSeam[i - 1][1]);
 		}
 	});
 });
@@ -277,32 +284,115 @@ describe('real gaps are kept', () => {
 });
 
 describe('winding', () => {
-	test('water stays on the left', async () => {
-		const result = await query(seamFixture());
-		expect(result.waterSide).toBe('left');
-
-		const points = result.polylines[0].points;
-		// The fixture winds the shore southward with the ocean to the east, so
-		// the output must run north to south.
-		expect(points[0][1]).toBeGreaterThan(points[points.length - 1][1]);
-
-		// Left of the direction of travel must point east, into the water.
-		// Segments shorter than 5 m are skipped: a splice carries a sideways
-		// step of a metre or two where the two tiles disagree about the shore,
-		// and that step is mostly east-west by construction.
-		let checked = 0;
+	/**
+	 * The side the water is on, measured rather than taken on trust: step
+	 * sideways off each segment and see which way lies inside the fixture's
+	 * water polygon. The fixture puts the sea east of the shore.
+	 *
+	 * Returns the fraction of segments with water to the right.
+	 */
+	function measureWaterSide(points: readonly [number, number][]): {
+		right: number;
+		left: number;
+	} {
+		let right = 0;
+		let left = 0;
 		for (let i = 1; i < points.length; i++) {
 			const dx = points[i][0] - points[i - 1][0];
 			const dy = points[i][1] - points[i - 1][1];
 			const length = Math.hypot(dx, dy);
+			// Skip the short sideways steps a splice leaves where two tiles
+			// disagree about the shore by a metre or two.
 			if (length < 5) continue;
-			checked++;
-			const leftX = -dy / length; // rotate the heading 90 degrees left
-			expect(leftX).toBeGreaterThan(0.9); // pointing east
+			// Right of the heading is the heading turned 90 degrees clockwise:
+			// (x, y) -> (y, -x), with x east and y north.
+			const rightX = dy / length;
+			if (rightX > 0.5) right++;
+			else if (rightX < -0.5) left++;
 		}
-		expect(checked).toBeGreaterThan(50);
+		return { right, left };
+	}
 
-		// And the sideways steps really are small.
+	test('water is on the right by default, which is what the tiles give', async () => {
+		const result = await query(seamFixture());
+		expect(result.waterSide).toBe('right');
+		expect(result.stats.detectedWaterSide).toBe('right');
+		expect(result.stats.reversed).toBe(false);
+
+		const points = result.polylines[0].points;
+		const sides = measureWaterSide(points);
+		expect(sides.right).toBeGreaterThan(50);
+		expect(sides.left).toBe(0);
+
+		// Water to the right of the heading, with the sea to the east, means
+		// the shore is walked northward.
+		expect(points[0][1]).toBeLessThan(points[points.length - 1][1]);
+	});
+
+	test('waterSide left reverses the polylines', async () => {
+		const result = await query(seamFixture(), { waterSide: 'left' });
+		expect(result.waterSide).toBe('left');
+		expect(result.stats.detectedWaterSide).toBe('right');
+		expect(result.stats.reversed).toBe(true);
+
+		const points = result.polylines[0].points;
+		const sides = measureWaterSide(points);
+		expect(sides.left).toBeGreaterThan(50);
+		expect(sides.right).toBe(0);
+
+		// Reversed, so it now runs north to south.
+		expect(points[0][1]).toBeGreaterThan(points[points.length - 1][1]);
+	});
+
+	test('the two sides are the same line walked opposite ways', async () => {
+		const right = await query(seamFixture());
+		const left = await query(seamFixture(), { waterSide: 'left' });
+
+		expect(left.polylines).toHaveLength(right.polylines.length);
+		expect(left.polylines[0].lengthMeters).toBeCloseTo(right.polylines[0].lengthMeters, 6);
+
+		const a = right.polylines[0].points;
+		const b = left.polylines[0].points;
+		expect(b).toHaveLength(a.length);
+		expect(b[0]).toEqual(a[a.length - 1]);
+		expect(b[b.length - 1]).toEqual(a[0]);
+	});
+
+	test('a tileset wound the other way is corrected, not passed through', async () => {
+		// Same shore, but every ring reversed, which is what a tileset using
+		// the opposite convention would hand us. The output must still put the
+		// water on the requested side.
+		const flipped = seamFixture().map((feature) => {
+			const geometry = feature.geometry as { type: string; coordinates: number[][][] };
+			return {
+				...feature,
+				geometry: {
+					...geometry,
+					coordinates: geometry.coordinates.map((ring) => [...ring].reverse())
+				}
+			} as GeoJSONFeature;
+		});
+
+		const result = await query(flipped);
+		expect(result.stats.detectedWaterSide).toBe('left');
+		expect(result.stats.reversed).toBe(true);
+		expect(result.waterSide).toBe('right');
+
+		const sides = measureWaterSide(result.polylines[0].points);
+		expect(sides.right).toBeGreaterThan(50);
+		expect(sides.left).toBe(0);
+	});
+
+	test('no closed ring to measure leaves the output alone', async () => {
+		const shore: TilePoint[] = [];
+		for (let v = 7999.3; v < 7999.7; v += 0.02) shore.push([shoreU(v), v]);
+		const result = await query([lineFeature(shore)], { bridgeMeters: 0 });
+		expect(result.stats.detectedWaterSide).toBeNull();
+		expect(result.stats.reversed).toBe(false);
+	});
+
+	test('splice steps stay small', async () => {
+		const points = (await query(seamFixture())).polylines[0].points;
 		for (let i = 1; i < points.length; i++) {
 			const length = Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
 			if (length >= 5) continue;

@@ -14,7 +14,8 @@ type Ring = number[][];
 export type CoastlinePolyline = {
 	/**
 	 * Vertices in tangent-plane metres about the query point: `[xEast, yNorth]`.
-	 * Walking the polyline from index 0, water lies to the left.
+	 * Walking the polyline from index 0, water lies to the side named by
+	 * {@link CoastlineResult.waterSide}, which defaults to the right.
 	 */
 	points: Meters[];
 	/** `true` when the first and last vertex coincide within `snapMeters`. */
@@ -52,6 +53,18 @@ export type CoastlineStats = {
 	vertexCount: number;
 	/** `false` when the map had not finished loading tiles before the query ran. */
 	settled: boolean;
+	/**
+	 * The side the water fell on in the source tiles, before any reversal.
+	 * `null` when there was no closed ring to measure, which happens if the
+	 * source layer holds lines rather than polygons.
+	 *
+	 * OpenFreeMap gives `'right'`. If this ever reads `'left'` for
+	 * OpenFreeMap, the tileset's winding has changed and the output was
+	 * reversed to compensate, which is exactly what it is here for.
+	 */
+	detectedWaterSide: WaterSide | null;
+	/** `true` when the polylines were reversed to satisfy the requested side. */
+	reversed: boolean;
 };
 
 export type CoastlineResult = {
@@ -63,10 +76,18 @@ export type CoastlineResult = {
 	radiusMeters: number;
 	/** Polylines, longest first. */
 	polylines: CoastlinePolyline[];
-	/** Which side of the direction of travel the water is on. Always `'left'`. */
-	waterSide: 'left';
+	/**
+	 * Which side of the direction of travel the water is on. This is a
+	 * guarantee, not an observation: polylines are reversed when they need to
+	 * be so the answer always matches the `waterSide` option, which defaults
+	 * to `'right'`.
+	 */
+	waterSide: WaterSide;
 	stats: CoastlineStats;
 };
+
+/** Which side of a polyline's direction of travel the water sits on. */
+export type WaterSide = 'left' | 'right';
 
 export type CoastlineNearOptions = {
 	/** Centre of the query, degrees. */
@@ -91,6 +112,13 @@ export type CoastlineNearOptions = {
 	snapMeters?: number;
 	/** Drop polylines shorter than this. Default 0. */
 	minLengthMeters?: number;
+	/**
+	 * Which side of each polyline's direction of travel the water must end up
+	 * on. Default `'right'`, which is the side OpenFreeMap's own winding
+	 * produces, so the default costs nothing. Ask for `'left'` and every
+	 * polyline is reversed to suit.
+	 */
+	waterSide?: WaterSide;
 	/** Drop segments lying along a vector-tile clip edge. Default `true`. */
 	dropTileEdges?: boolean;
 	/** How far from a tile boundary a clip edge may sit, in tile units. Default 0.1. */
@@ -151,10 +179,27 @@ const EQUATOR_METERS = 40075016.686;
  *
  * ## What you get back
  *
- * Polylines carry direction. Walking a polyline from index 0, water is on the
- * left and land on the right, because OpenMapTiles follows the OGC winding
- * convention and this function never reverses a segment. That is how a caller
- * works out which way the sea is without a second query.
+ * Polylines carry direction. Walking a polyline from index 0, **water is on
+ * the right and land on the left** by default. That is how a caller works out
+ * which way the sea faces without a second query:
+ *
+ * ```ts
+ * // Unit normal pointing into the water, at vertex i.
+ * const [x0, y0] = line.points[i];
+ * const [x1, y1] = line.points[i + 1];
+ * const length = Math.hypot(x1 - x0, y1 - y0);
+ * const seaward = [(y1 - y0) / length, -(x1 - x0) / length];
+ * ```
+ *
+ * The side is a guarantee rather than an observation. The winding of the
+ * source rings is measured per query, from the signed area of the largest
+ * ring, and the polylines are reversed if that does not match the `waterSide`
+ * option. So the contract holds even if a tileset winds the other way.
+ * `stats.detectedWaterSide` reports what the source actually did.
+ *
+ * OpenFreeMap's water rings run clockwise in longitude and latitude, which
+ * puts the interior on the right, so the default of `'right'` reverses
+ * nothing. Pass `waterSide: 'left'` for the opposite convention.
  *
  * ## Tile seams
  *
@@ -198,6 +243,7 @@ export async function coastlineNear(
 		simplifyMeters = 0,
 		snapMeters = 0.5,
 		minLengthMeters = 0,
+		waterSide = 'right',
 		dropTileEdges = true,
 		tileEdgeBand = 0.1,
 		tileEdgeMinCount = 3,
@@ -272,10 +318,26 @@ export async function coastlineNear(
 
 	const raw: RawSegment[] = [];
 	const offsetCounts = new Map<number, number>();
+	// Twice the signed area of the biggest ring seen, which is all but
+	// certainly an exterior ring of the dominant water body. Its sign is what
+	// tells us which side of a ring the water is on in this tileset.
+	let largestRingTwiceArea = 0;
 
 	for (const feature of features) {
 		for (const ring of ringsOf(feature.geometry)) {
 			if (ring.length < 2) continue;
+			// Only a closed ring has an orientation. The shoelace sum of an
+			// open line is a number, but it means nothing, so a source layer
+			// of lines rather than polygons must not be measured.
+			const first = ring[0];
+			const last = ring[ring.length - 1];
+			const closedRing =
+				ring.length >= 4 &&
+				isFinitePair(first) &&
+				isFinitePair(last) &&
+				first[0] === last[0] &&
+				first[1] === last[1];
+			let ringTwiceArea = 0;
 
 			for (let i = 1; i < ring.length; i++) {
 				const p0 = ring[i - 1];
@@ -302,6 +364,9 @@ export async function coastlineNear(
 				const [ax, ay] = frame.toMeters(p0[0], p0[1]);
 				const [bx, by] = frame.toMeters(p1[0], p1[1]);
 
+				// Shoelace over the whole ring, near the query point or not.
+				ringTwiceArea += ax * by - bx * ay;
+
 				// Cheap reject: the whole edge sits outside the circle.
 				if (
 					ax * ax + ay * ay > radiusSquared &&
@@ -321,8 +386,17 @@ export async function coastlineNear(
 					bOffsets: [boundaryOffset(u1, tileExtent), boundaryOffset(v1, tileExtent)]
 				});
 			}
+
+			if (closedRing && Math.abs(ringTwiceArea) > Math.abs(largestRingTwiceArea)) {
+				largestRingTwiceArea = ringTwiceArea;
+			}
 		}
 	}
+
+	// With x east and y north, a positive signed area is an anticlockwise
+	// ring, whose interior lies to the left of the direction of travel.
+	const detectedWaterSide: WaterSide | null =
+		largestRingTwiceArea > 0 ? 'left' : largestRingTwiceArea < 0 ? 'right' : null;
 
 	// Phase 2. Work out where this tileset clips.
 	const clipOffsets = dropTileEdges
@@ -391,6 +465,10 @@ export async function coastlineNear(
 		endsOnClipLine
 	});
 
+	// Reversing a polyline swaps which side of it the water is on, so this is
+	// all it takes to honour the requested side whatever the tileset did.
+	const reversed = detectedWaterSide !== null && detectedWaterSide !== waterSide;
+
 	const polylines: CoastlinePolyline[] = [];
 	for (const points of chains) {
 		const simplified = simplifyMeters > 0 ? simplifyPolyline(points, simplifyMeters) : points;
@@ -400,7 +478,7 @@ export async function coastlineNear(
 		const first = simplified[0];
 		const last = simplified[simplified.length - 1];
 		polylines.push({
-			points: simplified,
+			points: reversed ? simplified.slice().reverse() : simplified,
 			closed: Math.hypot(last[0] - first[0], last[1] - first[1]) <= snapMeters,
 			lengthMeters
 		});
@@ -412,7 +490,7 @@ export async function coastlineNear(
 		frame,
 		radiusMeters,
 		polylines,
-		waterSide: 'left',
+		waterSide,
 		stats: {
 			zoom,
 			tileZoom: effectiveTileZoom,
@@ -427,7 +505,9 @@ export async function coastlineNear(
 			bridgedGaps: bridged,
 			duplicateSegments,
 			vertexCount: polylines.reduce((n, p) => n + p.points.length, 0),
-			settled
+			settled,
+			detectedWaterSide,
+			reversed
 		}
 	};
 }

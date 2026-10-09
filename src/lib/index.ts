@@ -33,7 +33,8 @@ export type {
 	CoastlineNearOptions,
 	CoastlinePolyline,
 	CoastlineResult,
-	CoastlineStats
+	CoastlineStats,
+	WaterSide
 } from './coastline.js';
 
 // Map helpers
