@@ -24,7 +24,26 @@ export type OverlayGpu = {
 	context: unknown;
 	/** The preferred canvas format, already applied by `configure`. */
 	format: string;
+	/** The texture usage the canvas was configured with. */
+	usage: number;
+	/**
+	 * How many `requestAdapter` calls it took. More than one means the browser
+	 * answered null before its GPU process was up, which is normal on a
+	 * freshly started headless Chrome.
+	 */
+	adapterAttempts: number;
 };
+
+/**
+ * `GPUTextureUsage.RENDER_ATTACHMENT`, the default canvas usage.
+ *
+ * Spelled out as a constant so map-kit does not need `@webgpu/types` to name
+ * it. Combine with `GPU_COPY_SRC` to read the canvas back.
+ */
+export const GPU_RENDER_ATTACHMENT = 0x10;
+
+/** `GPUTextureUsage.COPY_SRC`. Add it to `gpuUsage` to allow `copyTextureToBuffer`. */
+export const GPU_COPY_SRC = 0x01;
 
 /**
  * The object `<Overlay>` hands to `ondraw` and to its child snippet.

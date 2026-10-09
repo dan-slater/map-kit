@@ -54,4 +54,5 @@ export type { MapContext } from './context.js';
 // Types
 export type { Pin, PinAnchor, MapPointerEvent, MapCamera } from './types.js';
 export type { LayerDef } from './layerDef.js';
+export { GPU_RENDER_ATTACHMENT, GPU_COPY_SRC } from './overlay.js';
 export type { OverlayFrame, OverlayGpu, OverlayMode, OverlayDrawReason } from './overlay.js';

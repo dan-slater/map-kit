@@ -59,7 +59,7 @@ later gives current values.
 | `canvas` | The `HTMLCanvasElement`. |
 | `map` | The MapLibre map this overlay is registered to. |
 | `ctx` | `CanvasRenderingContext2D` when `mode="2d"`, else `null`. |
-| `gpu` | `{ adapter, device, context, format }` when `mode="webgpu"` and the device is ready, else `null`. |
+| `gpu` | `{ adapter, device, context, format, usage, adapterAttempts }` when `mode="webgpu"` and the device is ready, else `null`. |
 | `width`, `height` | Canvas size in CSS pixels. |
 | `pixelRatio` | Device pixels per CSS pixel. |
 | `frame` | Redraw counter. The first draw is `1`. |
@@ -133,11 +133,38 @@ and be aware that you have then taken the map's gestures away in that area.
 - The device is requested asynchronously. `frame.gpu` is `null` until it
   arrives, and `onready` only fires once it has. If there is no `navigator.gpu`
   or no adapter, `onerror` fires and `frame.gpu` stays `null`.
+- **`requestAdapter` is retried.** A browser that has not yet started its GPU
+  process answers `null` once and succeeds a moment later, which is routine in
+  headless Chrome and in a cold tab. `<Overlay>` retries
+  `gpuAdapterRetries` times (default 5) at `gpuAdapterRetryDelayMs` intervals
+  (default 300 ms) before giving up. `frame.gpu.adapterAttempts` tells you how
+  many it took, which is the first thing to look at if startup feels slow.
+- `gpuPowerPreference="high-performance"` asks for the discrete GPU on a
+  machine that has one.
 - The canvas context is configured with the preferred canvas format and
   `alphaMode: 'premultiplied'` so the map shows through. Pass
   `gpuAlphaMode="opaque"` for a fully covering render.
 - `frame.gpu.format` is the format already applied by `configure`. Use it for
-  your render pipeline's colour target.
+  your render pipeline's colour target. On Linux this comes back as
+  `rgba8unorm`; elsewhere it is often `bgra8unorm`, so read bytes back in the
+  order the format says rather than assuming RGBA.
+- **Reading the canvas back.** The canvas is configured with
+  `RENDER_ATTACHMENT` only. To copy the rendered result into a buffer, add
+  `COPY_SRC`:
+
+  ```svelte
+  <script lang="ts">
+    import { Overlay, GPU_RENDER_ATTACHMENT, GPU_COPY_SRC } from '@dan-slater/map-kit';
+  </script>
+
+  <Overlay mode="webgpu" gpuUsage={GPU_RENDER_ATTACHMENT | GPU_COPY_SRC} {ondraw} />
+  ```
+
+  The two constants are exported so you do not need `@webgpu/types` just to
+  name `GPUTextureUsage`. Encode the `copyTextureToBuffer` into the same
+  command encoder as your render pass, before `submit`: the texture from
+  `getCurrentTexture()` is only valid for that frame. `bytesPerRow` must be a
+  multiple of 256.
 - The handles are typed as `unknown` so map-kit does not force `@webgpu/types`
   onto consumers who only draw in 2d. Install `@webgpu/types` in your app and
   cast:

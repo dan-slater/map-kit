@@ -4,6 +4,7 @@
 	import './tokens.css';
 	import { useMap } from './context.js';
 	import { isLocationOccluded, metersPerPixel as measureMetersPerPixel } from './mapUtils.js';
+	import { GPU_RENDER_ATTACHMENT } from './overlay.js';
 	import type { OverlayDrawReason, OverlayFrame, OverlayGpu, OverlayMode } from './overlay.js';
 
 	type Props = {
@@ -21,6 +22,22 @@
 		contextAttributes?: CanvasRenderingContext2DSettings;
 		/** `alphaMode` for the WebGPU canvas configuration. Default `'premultiplied'`. */
 		gpuAlphaMode?: 'opaque' | 'premultiplied';
+		/**
+		 * `usage` for the WebGPU canvas configuration. Defaults to
+		 * `RENDER_ATTACHMENT` (`0x10`). Add `COPY_SRC` (`0x01`) to read the
+		 * rendered canvas back with `copyTextureToBuffer`.
+		 */
+		gpuUsage?: number;
+		/** Adapter power preference. Pass `'high-performance'` to prefer a discrete GPU. */
+		gpuPowerPreference?: 'low-power' | 'high-performance';
+		/**
+		 * How many extra times to ask for an adapter when the first request
+		 * returns null. A freshly started browser often has not brought its GPU
+		 * process up yet and answers null once before succeeding. Default 5.
+		 */
+		gpuAdapterRetries?: number;
+		/** Delay between adapter attempts, milliseconds. Default 300. */
+		gpuAdapterRetryDelayMs?: number;
 		/** Extra classes on the canvas. */
 		class?: string;
 		/** Called once the canvas, and under WebGPU the device, are ready. */
@@ -40,6 +57,10 @@
 		autoClear = true,
 		contextAttributes,
 		gpuAlphaMode = 'premultiplied',
+		gpuUsage = GPU_RENDER_ATTACHMENT,
+		gpuPowerPreference,
+		gpuAdapterRetries = 5,
+		gpuAdapterRetryDelayMs = 300,
 		class: className = '',
 		onready,
 		ondraw,
@@ -161,24 +182,46 @@
 		if (continuous && !disposed) scheduled = requestAnimationFrame(draw);
 	}
 
+	type MinimalGpuAdapter = { requestDevice(): Promise<unknown> };
+	type MinimalGpu = {
+		requestAdapter(options?: Record<string, unknown>): Promise<MinimalGpuAdapter | null>;
+		getPreferredCanvasFormat(): string;
+	};
+
+	async function requestAdapterWithRetry(
+		gpuApi: MinimalGpu
+	): Promise<{ adapter: MinimalGpuAdapter | null; attempts: number }> {
+		const options = gpuPowerPreference ? { powerPreference: gpuPowerPreference } : undefined;
+		for (let attempt = 1; attempt <= gpuAdapterRetries + 1; attempt++) {
+			const adapter = await gpuApi.requestAdapter(options);
+			if (adapter) return { adapter, attempts: attempt };
+			if (disposed || attempt === gpuAdapterRetries + 1) return { adapter: null, attempts: attempt };
+			await new Promise((resolve) => setTimeout(resolve, gpuAdapterRetryDelayMs));
+		}
+		return { adapter: null, attempts: gpuAdapterRetries + 1 };
+	}
+
 	async function initWebGPU(): Promise<void> {
-		const gpuApi = (navigator as Navigator & { gpu?: unknown }).gpu as
-			| {
-					requestAdapter(): Promise<unknown>;
-					getPreferredCanvasFormat(): string;
-			  }
-			| undefined;
+		const gpuApi = (navigator as Navigator & { gpu?: unknown }).gpu as MinimalGpu | undefined;
 
 		if (!gpuApi) {
-			onerror?.(new Error('[map-kit] <Overlay mode="webgpu"> needs navigator.gpu, which this browser does not expose'));
+			onerror?.(
+				new Error(
+					'[map-kit] <Overlay mode="webgpu"> needs navigator.gpu, which this browser does not expose'
+				)
+			);
 			return;
 		}
 
-		const adapter = (await gpuApi.requestAdapter()) as {
-			requestDevice(): Promise<unknown>;
-		} | null;
+		const { adapter, attempts } = await requestAdapterWithRetry(gpuApi);
+		if (disposed) return;
 		if (!adapter) {
-			onerror?.(new Error('[map-kit] no WebGPU adapter available'));
+			onerror?.(
+				new Error(
+					`[map-kit] no WebGPU adapter after ${gpuAdapterRetries + 1} attempts. ` +
+						'On Linux headless Chrome this usually means the GPU process never started.'
+				)
+			);
 			return;
 		}
 
@@ -193,9 +236,13 @@
 			return;
 		}
 
+		// The canvas must have a non-zero size before configure, or the first
+		// getCurrentTexture comes back 1x1 and everything drawn is thrown away.
+		sync();
+
 		const format = gpuApi.getPreferredCanvasFormat();
-		context.configure({ device, format, alphaMode: gpuAlphaMode });
-		gpu = { adapter, device, context, format };
+		context.configure({ device, format, alphaMode: gpuAlphaMode, usage: gpuUsage });
+		gpu = { adapter, device, context, format, usage: gpuUsage, adapterAttempts: attempts };
 	}
 
 	onMount(() => {
