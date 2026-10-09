@@ -356,7 +356,104 @@ match. Both are explained, with the measured numbers and every option, in
 | `useMap()`, `useMapOptional()` | Reach the enclosing `<Map>` from your own component. |
 | `OPENFREEMAP_STYLES`, `resolveStyle` | The three style URLs. |
 
-## Theming
+## Theming the basemap
+
+The stock OpenFreeMap styles are general-purpose cartography: many hues, tuned
+for finding a street. A product map usually wants the opposite, a quiet ground
+for its own data to sit on. Pass a theme and the basemap is recoloured from a
+small token set, and the globe gets a matching atmosphere.
+
+```svelte
+<script lang="ts">
+  import { Map, themes, tokensFor } from '@dan-slater/map-kit';
+</script>
+
+<div style={tokensFor(themes.ink)}>
+  <Map theme={themes.ink}>...</Map>
+</div>
+```
+
+`theme` recolours the map. `tokensFor(theme)` returns the matching `--mk-`
+declarations so the pins and panel come along with it; it is a declaration
+list, so it drops straight into a `style` attribute.
+
+### The four presets
+
+| | |
+| --- | --- |
+| `ink` | Deep navy ocean, near-black land, a teal coastline glow and coral pins. Sparse cool-grey labels. For a dark product UI. |
+| `paper` | Warm off-white land, pale blue-grey water, hairline ink coasts, italic labels, faint shaded relief. Editorial. |
+| `chart` | Nautical chart: cream land, pale cyan water tinted lighter inland, navy coast and dashed boundaries, spaced capitals. |
+| `mono` | One dark, one light, nothing else. No roads, no labels, no atmosphere. Reads as a graphic. |
+
+```svelte
+<Map theme={themes.ink} />     <!-- dark, teal coast, coral pins -->
+<Map theme={themes.paper} />   <!-- warm off-white, editorial -->
+<Map theme={themes.chart} />   <!-- nautical chart -->
+<Map theme={themes.mono} />    <!-- duotone graphic -->
+```
+
+See them at `docs/img/themes/`, three views each.
+
+### The theme tokens
+
+| Token | Meaning |
+| --- | --- |
+| `water` | Oceans, lakes and rivers. |
+| `waterShallow` | Tints water whose `class` is not `ocean`. OpenMapTiles carries no depth, so this is a class split, not bathymetry. |
+| `waterway` | Rivers drawn as lines. Defaults to `water`. |
+| `land` | The ground, and the colour behind everything. |
+| `landLow` | Natural cover: wood, grass, sand, ice. |
+| `landHigh` | Human land use: residential, school, cemetery. |
+| `parks` | Parks. `null` hides them. |
+| `roads` | The road network, flattened to one colour. `null` hides it. |
+| `roadCasing` | Road casings, if you want them distinct. Defaults to `roads`. |
+| `roadMinZoom` | Hide roads below this zoom. |
+| `buildings` | Footprints and extrusions. `null` hides them. |
+| `boundaries` | Admin boundaries. `null` hides them. |
+| `boundaryDash` | Dash pattern for boundaries. |
+| `coastline` | A hairline along the water edge, which the stock styles do not have. `null` for none. |
+| `coastlineWidth`, `coastlineBlur` | Width at zoom 10, and blur for a glow. |
+| `labelText`, `labelHalo` | Label colour and halo. |
+| `labelWater` | Water label colour. Defaults to `labelText`. |
+| `labelDensity` | `'full'`, `'sparse'` (countries, states, cities, towns and water only) or `'none'`. |
+| `labelUppercase`, `labelLetterSpacing` | Case and tracking. |
+| `fontStack` | See the note below. |
+| `hillshadeOpacity` | Natural Earth shaded relief, 0 to 1. 0 removes it. |
+| `sky` | `{ space, halo, blend }` for the globe's atmosphere. |
+| `tokens` | The `--mk-` overrides `tokensFor` emits. |
+
+Colours are rewritten inside whatever expression the style already uses, so a
+zoom-interpolated colour keeps its stops and its interpolation and only the
+colour at each stop changes. Alpha is carried over, so layers the style
+deliberately made faint stay faint.
+
+**On fonts.** OpenFreeMap serves only `Noto Sans Regular`, `Noto Sans Italic`
+and `Noto Sans Bold`. Naming anything else gives you blank labels, so `chart`
+reaches for spaced capitals and `paper` for italic rather than a real
+monospace or serif. Real ones would mean hosting your own glyph PBFs.
+
+### Your own theme
+
+Copy a preset and change what you need:
+
+```ts
+import { themes, type BasemapTheme } from '@dan-slater/map-kit';
+
+const brand: BasemapTheme = {
+	...themes.paper,
+	water: '#e3edf2',
+	coastline: '#0f766e',
+	tokens: { ...themes.paper.tokens, '--mk-color-pin': '#0f766e' }
+};
+```
+
+`themeStyle(style, theme)` is exported if you want to apply a theme to a style
+object yourself. `<Map>` fetches the style and themes it before the map is
+built, so the stock cartography never flashes; later changes to `style` or
+`theme` go through one `setStyle` with `transformStyle`.
+
+## Theming the components
 
 Every colour, radius, size and font comes from a CSS custom property with an
 `--mk-` prefix. Override the ones you care about:

@@ -1,5 +1,12 @@
 # Theming
 
+This page is about the components: the pins, the panel, the overlay. For the
+map underneath them, see **Theming the basemap** in the README, which covers
+`<Map theme>`, the four presets and `themeStyle`. The two fit together:
+`tokensFor(theme)` turns a basemap theme into the `--mk-` overrides described
+here, so the components match the map.
+
+
 Every colour, radius, size and font the map-kit components use reads from a CSS
 custom property with an `--mk-` prefix. Override the ones you care about and
 leave the rest.
@@ -95,8 +102,8 @@ the whole document. Two differently branded maps side by side:
 | Token | Default | Used by |
 | --- | --- | --- |
 | `--mk-panel-width` | `340px` | panel width on wide viewports |
-| `--mk-panel-background` | `var(--mk-color-surface)` | panel background |
-| `--mk-panel-inset` | `var(--mk-space-3)` | gap between panel and map edge |
+| `--mk-panel-background` | falls back to `--mk-color-surface` | panel background |
+| `--mk-panel-inset` | falls back to `--mk-space-3` | gap between panel and map edge |
 | `--mk-sheet-max-height` | `60vh` | bottom sheet height below 640px |
 
 ### Motion and stacking
@@ -105,6 +112,7 @@ the whole document. Two differently branded maps side by side:
 | --- | --- | --- |
 | `--mk-duration` | `180ms` | set to `0ms` to switch animation off |
 | `--mk-easing` | `cubic-bezier(0.2, 0, 0.1, 1)` | |
+| `--mk-map-background` | `transparent` | behind the map canvas. Under globe projection the canvas is transparent outside the planet, so set this or the host page shows through. A basemap theme sets it to its sky colour. |
 | `--mk-z-overlay` | `1` | `<Overlay>` canvas |
 | `--mk-z-pin` | `2` | `<Pins>` layer |
 | `--mk-z-panel` | `3` | `<Panel>` |

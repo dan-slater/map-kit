@@ -47,6 +47,12 @@ export type { FeatureCollection } from './shapes.js';
 export { OPENFREEMAP_STYLES, resolveStyle } from './styles.js';
 export type { MapStyleName, MapStyleInput } from './styles.js';
 
+// Basemap theming
+export { themeStyle, tokensFor, parseColour } from './theme.js';
+export type { BasemapTheme, LabelDensity } from './theme.js';
+export { themes, ink, paper, chart, mono, THEME_NAMES, themeByName } from './themes.js';
+export type { ThemeName } from './themes.js';
+
 // Context, for building your own map-aware components
 export { useMap, useMapOptional } from './context.js';
 export type { MapContext } from './context.js';

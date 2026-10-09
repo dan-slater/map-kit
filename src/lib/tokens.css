@@ -65,10 +65,25 @@
 	--mk-shadow-1: 0 1px 2px rgb(10 12 16 / 0.12);
 	--mk-shadow-2: 0 10px 30px rgb(10 12 16 / 0.18);
 
+	/*
+	 * Behind the map canvas. Under globe projection the canvas is transparent
+	 * outside the planet and outside the atmosphere, so without this the host
+	 * page shows through and fights the theme. A basemap theme sets it to the
+	 * same colour as its sky.
+	 */
+	--mk-map-background: transparent;
+
 	/* Panel */
 	--mk-panel-width: 340px;
-	--mk-panel-background: var(--mk-color-surface);
-	--mk-panel-inset: var(--mk-space-3);
+	/*
+	 * --mk-panel-background and --mk-panel-inset are deliberately not declared
+	 * here. A custom property whose value is `var(--something-else)` is
+	 * resolved on the element it is declared on, so an alias set at :root would
+	 * freeze to the :root value and ignore an override further down the tree.
+	 * <Panel> instead writes the fallback at the point of use:
+	 * `var(--mk-panel-background, var(--mk-color-surface))`, which resolves
+	 * against the panel's own cascade.
+	 */
 	--mk-sheet-max-height: 60vh;
 
 	/* Motion. Set --mk-duration to 0ms to switch animation off. */

@@ -11,6 +11,22 @@ move up without touching their code.
 
 ### Added
 
+- **Basemap theming.** `themeStyle(style, theme)` recolours an OpenMapTiles
+  style from a small token set, and `<Map theme={...}>` applies it. Colours are
+  rewritten inside whatever expression the style already uses, so a
+  zoom-interpolated colour keeps its stops and its interpolation, and alpha is
+  carried over. The theme also sets the globe's atmosphere, and can add a
+  coastline hairline, which the stock styles do not have.
+- Four presets in `themes`: `ink`, `paper`, `chart` and `mono`. Each carries
+  matching `--mk-` overrides, which `tokensFor(theme)` returns as a CSS
+  declaration list so the pins and panel follow the basemap.
+- `--mk-map-background` paints behind the map canvas. Under globe projection
+  the canvas is transparent outside the planet, so without this the host page
+  shows through and fights the theme. Defaults to `transparent`, which is the
+  previous behaviour; each preset sets it to its sky colour.
+- `scripts/shots.mjs` renders every preset at three views into
+  `docs/img/themes/`, and the demo takes `?theme=<name>` so a link carries a
+  look.
 - `<Overlay>` retries `requestAdapter` when it comes back `null`. A browser
   that has not yet started its GPU process answers `null` once and succeeds a
   moment later, which is routine in headless Chrome and in a cold tab. New
@@ -30,6 +46,15 @@ move up without touching their code.
   reproduce real tile clipping.
 - A `/webgpu` route in the demo app, and `scripts/verify-webgpu.ts`, which
   drives it on real hardware and reads pixels back off the GPU.
+
+### Fixed
+
+- `--mk-panel-background` and `--mk-panel-inset` were declared at `:root` as
+  aliases of `--mk-color-surface` and `--mk-space-3`. A custom property whose
+  value is `var(--other)` resolves on the element it is declared on, so those
+  aliases froze to the `:root` values and ignored any override further down
+  the tree: setting `--mk-color-surface` on a wrapper left the panel white.
+  `<Panel>` now writes the fallback at the point of use instead.
 
 ### Changed
 

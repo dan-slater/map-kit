@@ -87,10 +87,10 @@
 <style>
 	.mk-panel {
 		position: absolute;
-		top: var(--mk-panel-inset);
-		bottom: var(--mk-panel-inset);
+		top: var(--mk-panel-inset, var(--mk-space-3));
+		bottom: var(--mk-panel-inset, var(--mk-space-3));
 		width: var(--mk-panel-width);
-		max-width: calc(100% - 2 * var(--mk-panel-inset));
+		max-width: calc(100% - 2 * var(--mk-panel-inset, var(--mk-space-3)));
 		z-index: var(--mk-z-panel);
 
 		display: flex;
@@ -98,7 +98,7 @@
 		overflow: hidden;
 
 		pointer-events: auto;
-		background: var(--mk-panel-background);
+		background: var(--mk-panel-background, var(--mk-color-surface));
 		color: var(--mk-color-text);
 		font-family: var(--mk-font-family);
 		font-size: var(--mk-font-size-md);
@@ -114,13 +114,13 @@
 	}
 
 	.mk-panel--left {
-		left: var(--mk-panel-inset);
-		transform: translateX(calc(-100% - var(--mk-panel-inset)));
+		left: var(--mk-panel-inset, var(--mk-space-3));
+		transform: translateX(calc(-100% - var(--mk-panel-inset, var(--mk-space-3))));
 	}
 
 	.mk-panel--right {
-		right: var(--mk-panel-inset);
-		transform: translateX(calc(100% + var(--mk-panel-inset)));
+		right: var(--mk-panel-inset, var(--mk-space-3));
+		transform: translateX(calc(100% + var(--mk-panel-inset, var(--mk-space-3))));
 	}
 
 	.mk-panel--open {
@@ -199,13 +199,13 @@
 		.mk-panel--left,
 		.mk-panel--right {
 			top: auto;
-			left: var(--mk-panel-inset);
-			right: var(--mk-panel-inset);
-			bottom: var(--mk-panel-inset);
+			left: var(--mk-panel-inset, var(--mk-space-3));
+			right: var(--mk-panel-inset, var(--mk-space-3));
+			bottom: var(--mk-panel-inset, var(--mk-space-3));
 			width: auto;
 			max-width: none;
 			max-height: var(--mk-sheet-max-height);
-			transform: translateY(calc(100% + var(--mk-panel-inset)));
+			transform: translateY(calc(100% + var(--mk-panel-inset, var(--mk-space-3))));
 		}
 
 		.mk-panel--open {

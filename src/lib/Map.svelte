@@ -1,10 +1,15 @@
 <script lang="ts">
 	import { onMount, untrack, type Snippet } from 'svelte';
-	import maplibregl, { type Map as MapLibreMap, type ProjectionSpecification } from 'maplibre-gl';
+	import maplibregl, {
+		type Map as MapLibreMap,
+		type ProjectionSpecification,
+		type StyleSpecification
+	} from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import './tokens.css';
 	import { setMapContext, type MapContext } from './context.js';
 	import { resolveStyle, type MapStyleInput } from './styles.js';
+	import { themeStyle, type BasemapTheme } from './theme.js';
 	import { flyTo as flyToMap, type FlyToOptions } from './flyTo.js';
 	import type { MapCamera, MapPointerEvent } from './types.js';
 
@@ -27,6 +32,12 @@
 		pitch?: number;
 		/** `'liberty' | 'positron' | 'bright'`, a style URL, or a style object. */
 		style?: MapStyleInput;
+		/**
+		 * Recolour the basemap from a small token set, and set the globe's
+		 * atmosphere. Pass one of the presets from `themes`, or your own.
+		 * `null` leaves the style exactly as published.
+		 */
+		theme?: BasemapTheme | null;
 		/** Whether the user can pan, zoom and rotate. Reactive. */
 		interactive?: boolean;
 		/** `'globe'` (the default), `'mercator'`, or a full projection spec. */
@@ -56,6 +67,7 @@
 		bearing = $bindable(0),
 		pitch = $bindable(0),
 		style = 'liberty',
+		theme = null,
 		interactive = true,
 		projection = 'globe',
 		map = $bindable(null),
@@ -174,9 +186,48 @@
 	}
 
 	onMount(() => {
+		let cancelled = false;
+		let created: MapLibreMap | null = null;
+
+		// The themed style is fetched before the map is built. MapLibre would
+		// fetch the same URL anyway, so this costs nothing and avoids a flash
+		// of the stock cartography before the theme lands. Later changes go
+		// through setStyle's transformStyle, which needs no extra fetch.
+		void buildInitialStyle()
+			.then((initialStyle) => {
+				if (cancelled) return;
+				created = start(initialStyle);
+			})
+			.catch((error) => onerror?.(error));
+
+		return () => {
+			cancelled = true;
+			destroyed = true;
+			loaded = false;
+			instance = null;
+			map = null;
+			rejectReady(new Error('[map-kit] <Map> was destroyed before it loaded'));
+			created?.remove();
+		};
+	});
+
+	async function buildInitialStyle(): Promise<string | StyleSpecification> {
+		const resolved = resolveStyle(style);
+		if (!theme) return resolved;
+		if (typeof resolved !== 'string') return themeStyle(resolved, theme);
+
+		const response = await fetch(resolved);
+		if (!response.ok) {
+			onerror?.(new Error(`[map-kit] could not fetch style ${resolved}: ${response.status}`));
+			return resolved;
+		}
+		return themeStyle((await response.json()) as StyleSpecification, theme);
+	}
+
+	function start(initialStyle: string | StyleSpecification): MapLibreMap {
 		const m = new maplibregl.Map({
 			container,
-			style: resolveStyle(style),
+			style: initialStyle,
 			center: [center[0], center[1]],
 			zoom,
 			bearing,
@@ -223,15 +274,8 @@
 		const onMapError = (event: unknown) => onerror?.(event);
 		m.on('error', onMapError);
 
-		return () => {
-			destroyed = true;
-			loaded = false;
-			instance = null;
-			map = null;
-			rejectReady(new Error('[map-kit] <Map> was destroyed before it loaded'));
-			m.remove();
-		};
-	});
+		return m;
+	}
 
 	// Props drive the camera, but only when they genuinely differ from where the
 	// map already is. The move handler writes the map's own values back into the
@@ -252,11 +296,34 @@
 		});
 	});
 
+	// A change of style or theme is one setStyle. `transformStyle` runs after
+	// MapLibre has fetched the new style and before it diffs it against the
+	// current one, so the theme is applied without a second request and
+	// without tearing the sources down.
+	let appliedStyle = $state<MapStyleInput | null>(null);
+	let appliedTheme = $state<BasemapTheme | null>(null);
+
 	$effect(() => {
-		const next = resolveStyle(style);
+		const nextStyle = style;
+		const nextTheme = theme ?? null;
 		const m = instance;
 		if (!m || destroyed) return;
-		untrack(() => m.setStyle(next));
+
+		untrack(() => {
+			// Skip the first run: the map was built with this style already.
+			if (appliedStyle === null && appliedTheme === null) {
+				appliedStyle = nextStyle;
+				appliedTheme = nextTheme;
+				return;
+			}
+			if (appliedStyle === nextStyle && appliedTheme === nextTheme) return;
+			appliedStyle = nextStyle;
+			appliedTheme = nextTheme;
+
+			m.setStyle(resolveStyle(nextStyle), {
+				transformStyle: (_previous, next) => (nextTheme ? themeStyle(next, nextTheme) : next)
+			});
+		});
 	});
 
 	$effect(() => {
@@ -293,6 +360,7 @@
 		position: relative;
 		width: 100%;
 		height: 100%;
+		background: var(--mk-map-background);
 		font-family: var(--mk-font-family);
 		font-size: var(--mk-font-size-md);
 		line-height: var(--mk-line-height);

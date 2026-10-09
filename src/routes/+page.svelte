@@ -6,10 +6,15 @@
 		Overlay,
 		Panel,
 		Pins,
+		THEME_NAMES,
 		circle,
 		coastlineNear,
 		enuFrame,
 		flyTo,
+		themeByName,
+		themes,
+		tokensFor,
+		type ThemeName,
 		type CoastlineResult,
 		type MapStyleName,
 		type OverlayFrame,
@@ -109,6 +114,31 @@
 	let projection = $state<'globe' | 'mercator'>('globe');
 	let labelledPins = $state(false);
 
+	// ?theme=ink picks a basemap theme on load, so a link can carry one.
+	const initialTheme = (() => {
+		if (typeof window === 'undefined') return 'ink';
+		const requested = new URLSearchParams(window.location.search).get('theme');
+		if (requested === 'none') return 'none';
+		return themeByName(requested) ? (requested as ThemeName) : 'ink';
+	})();
+
+	let themeName = $state<ThemeName | 'none'>(initialTheme);
+	const theme = $derived(themeName === 'none' ? null : themes[themeName]);
+	const themeTokens = $derived(theme ? tokensFor(theme) : '');
+
+	// The overlay and the radius ring are drawn by us, not by CSS, so they read
+	// the theme's tokens directly to stay in step with the basemap.
+	const accentColour = $derived(theme?.tokens?.['--mk-color-accent'] ?? '#1f6feb');
+	const coastColour = $derived(theme?.tokens?.['--mk-color-pin-selected'] ?? '#e3663e');
+
+	// Keep the URL in step so the current look is always shareable.
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const url = new URL(window.location.href);
+		url.searchParams.set('theme', themeName);
+		history.replaceState(null, '', url);
+	});
+
 	let showRing = $state(true);
 	let ringRadius = $state(2000);
 
@@ -177,7 +207,7 @@
 
 		if (coastLonLat.length > 0) {
 			ctx.lineWidth = 2;
-			ctx.strokeStyle = '#e3663e';
+			ctx.strokeStyle = coastColour;
 			ctx.lineJoin = 'round';
 			ctx.lineCap = 'round';
 			for (const line of coastLonLat) {
@@ -197,7 +227,7 @@
 		const { x, y } = frame.project(pin.lon, pin.lat);
 		const arm = 18;
 		ctx.lineWidth = 1.5;
-		ctx.strokeStyle = '#1f6feb';
+		ctx.strokeStyle = accentColour;
 		ctx.beginPath();
 		ctx.moveTo(x - arm, y);
 		ctx.lineTo(x - 5, y);
@@ -217,7 +247,7 @@
 		const mpp = frame.metersPerPixel(pin.lat, pin.lon);
 		if (Number.isFinite(mpp)) {
 			ctx.font = '11px ui-monospace, monospace';
-			ctx.fillStyle = '#1f6feb';
+			ctx.fillStyle = accentColour;
 			ctx.fillText(`${mpp.toFixed(mpp < 10 ? 2 : 0)} m/px`, x + arm + 4, y - 4);
 		}
 	}
@@ -241,10 +271,11 @@
 	<title>map-kit demo</title>
 </svelte:head>
 
-<main class="page">
+<main class="page" style={themeTokens}>
 	<Map
 		bind:map
 		{style}
+		{theme}
 		{projection}
 		center={[12, 10]}
 		zoom={1.9}
@@ -262,10 +293,10 @@
 				data={ring}
 				bind:visible={showRing}
 				layers={[
-					{ type: 'fill', paint: { 'fill-color': '#1f6feb', 'fill-opacity': 0.08 } },
+					{ type: 'fill', paint: { 'fill-color': accentColour, 'fill-opacity': 0.08 } },
 					{
 						type: 'line',
-						paint: { 'line-color': '#1f6feb', 'line-width': 1.5, 'line-dasharray': [2, 2] }
+						paint: { 'line-color': accentColour, 'line-width': 1.5, 'line-dasharray': [2, 2] }
 					}
 				]}
 			/>
@@ -325,6 +356,16 @@
 		<p class="status">{message}</p>
 
 		<label>
+			Theme
+			<select bind:value={themeName}>
+				{#each THEME_NAMES as name (name)}
+					<option value={name}>{name}</option>
+				{/each}
+				<option value="none">none (stock)</option>
+			</select>
+		</label>
+
+		<label>
 			Style
 			<select bind:value={style}>
 				<option value="liberty">liberty</option>
@@ -376,6 +417,8 @@
 	.page {
 		position: fixed;
 		inset: 0;
+		/* Matches the theme's sky, so nothing of the host page shows past the globe. */
+		background: var(--mk-map-background, #0d1117);
 	}
 
 	.loading {
