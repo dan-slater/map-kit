@@ -29,6 +29,7 @@
     "build": "svelte-package -i src/lib -o dist",
     "prepare": "svelte-package -i src/lib -o dist",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test": "bun test",
     "demo:build": "vite build"
   },
   "peerDependencies": {
@@ -40,6 +41,7 @@
     "@sveltejs/kit": "^2.46.4",
     "@sveltejs/package": "^2.5.4",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "@types/bun": "^1.4.2",
     "@types/geojson": "^7946.0.16",
     "maplibre-gl": "^5.9.0",
     "playwright": "^1.64.0",

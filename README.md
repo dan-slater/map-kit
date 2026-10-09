@@ -162,6 +162,27 @@ Pins are positioned by writing a transform on every map move, so they stay glued
 to their coordinates. Under globe projection, pins behind the planet fade out
 via `--mk-pin-occluded-opacity`; set `hideOccluded={false}` to keep them.
 
+**`<Pins>` is DOM-based and has no clustering.** Each pin is a real element
+that gets a transform on every frame, which is what makes custom snippets,
+focus and keyboard access work. That suits tens or low hundreds of pins. For
+large sets, put the data through `<Layer>` with a GeoJSON source and a symbol
+or circle layer, which MapLibre renders on the GPU and can cluster for you:
+
+```svelte
+<Layer
+	id="sites"
+	data={points(items)}
+	source={{ cluster: true, clusterRadius: 50 }}
+	layers={[
+		{ type: 'circle', filter: ['has', 'point_count'] },
+		{ type: 'circle', filter: ['!', ['has', 'point_count']] }
+	]}
+/>
+```
+
+The two approaches mix: a `<Layer>` for the crowd, `<Pins>` for the handful you
+want rich markup on.
+
 ### `<Panel>`
 
 A side panel bound to whatever is selected. Becomes a bottom sheet below 640px.
@@ -365,9 +386,14 @@ No Node needed; this repo is built with [Bun](https://bun.sh).
 ```sh
 bun install
 bun run check        # svelte-kit sync && svelte-check
+bun test             # unit tests for the geometry and the tile query
 bun run build        # svelte-package from src/lib to dist
 bunx vite dev --host 127.0.0.1 --port 5180   # the demo app
 ```
+
+`tests/` covers `geo.ts` against independently computed WGS84 values, and the
+coastline stitcher against synthetic vector tiles that reproduce real clipping:
+each tile buffered by 64/4096 and simplifying its own copy of a shared shore.
 
 `src/lib` is the package. `src/routes` is a demo that exercises every
 component: a globe with six pins, a panel bound to the selection, a toggle
