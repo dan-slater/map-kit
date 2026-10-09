@@ -7,18 +7,17 @@
 		Panel,
 		Pins,
 		AutoRotate,
+		Controls,
 		GlobeGlow,
 		Graticule,
 		StarField,
-		THEME_NAMES,
 		circle,
 		coastlineNear,
 		enuFrame,
 		flyTo,
+		mapSettings,
 		sweepTo,
 		themeByName,
-		themes,
-		tokensFor,
 		type ThemeName,
 		type CoastlineResult,
 		type MapStyleName,
@@ -116,7 +115,6 @@
 	let panelOpen = $state(false);
 
 	let style = $state<MapStyleName>('liberty');
-	let projection = $state<'globe' | 'mercator'>('globe');
 	let labelledPins = $state(false);
 
 	// ink is the chosen default. ?theme=<name> overrides it, so a link can
@@ -139,15 +137,22 @@
 		return new Set(raw.split(',').map((part) => part.trim()).filter(Boolean));
 	})();
 
-	let fxGlow = $state(requestedEffects.has('glow'));
-	let fxStars = $state(requestedEffects.has('stars'));
-	let fxGraticule = $state(requestedEffects.has('graticule'));
-	let fxRotate = $state(requestedEffects.has('rotate'));
-	let fxSweep = $state(requestedEffects.has('sweep'));
+	// The headless store holds what a settings UI changes. <Controls> binds
+	// straight to it; this page only adds the URL sync, which is the app's
+	// business rather than map-kit's.
+	const settings = mapSettings({
+		theme: initialTheme === 'none' ? null : initialTheme,
+		effects: {
+			glow: requestedEffects.has('glow'),
+			stars: requestedEffects.has('stars'),
+			graticule: requestedEffects.has('graticule'),
+			autoRotate: requestedEffects.has('rotate'),
+			sweep: requestedEffects.has('sweep')
+		}
+	});
 
-	let themeName = $state<ThemeName | 'none'>(initialTheme);
-	const theme = $derived(themeName === 'none' ? null : themes[themeName]);
-	const themeTokens = $derived(theme ? tokensFor(theme) : '');
+	const theme = $derived(settings.theme);
+	const themeTokens = $derived(settings.tokens);
 
 	// The overlay and the radius ring are drawn by us, not by CSS, so they read
 	// the theme's tokens directly to stay in step with the basemap.
@@ -158,13 +163,14 @@
 	$effect(() => {
 		if (typeof window === 'undefined') return;
 		const url = new URL(window.location.href);
-		url.searchParams.set('theme', themeName);
+		url.searchParams.set('theme', settings.themeName ?? 'none');
+		const fx = settings.effects;
 		const on = [
-			fxGlow && 'glow',
-			fxStars && 'stars',
-			fxGraticule && 'graticule',
-			fxRotate && 'rotate',
-			fxSweep && 'sweep'
+			fx.glow && 'glow',
+			fx.stars && 'stars',
+			fx.graticule && 'graticule',
+			fx.autoRotate && 'rotate',
+			fx.sweep && 'sweep'
 		].filter(Boolean) as string[];
 		if (on.length > 0) url.searchParams.set('fx', on.join(','));
 		else url.searchParams.delete('fx');
@@ -196,7 +202,7 @@
 			? `${pin.props?.name}. Run the coastline query to read the shoreline here.`
 			: 'Pick a pin, then run the coastline query.';
 		if (!pin || !map) return;
-		if (fxSweep) void sweepTo(map, { lon: pin.lon, lat: pin.lat, zoom: 9 });
+		if (settings.effects.sweep) void sweepTo(map, { lon: pin.lon, lat: pin.lat, zoom: 9 });
 		else void flyTo(map, { lon: pin.lon, lat: pin.lat, zoom: 9, duration: 1800 });
 	}
 
@@ -297,7 +303,9 @@
 	// A handle for the headless browser harness in scripts/verify.mjs. Dev only.
 	$effect(() => {
 		if (!import.meta.env.DEV || !map) return;
-		Object.assign(window, { mapkit: { map, coastlineNear, flyTo, enuFrame, spots } });
+		Object.assign(window, {
+			mapkit: { map, coastlineNear, flyTo, enuFrame, spots, settings }
+		});
 	});
 </script>
 
@@ -309,8 +317,8 @@
 	<Map
 		bind:map
 		{style}
-		{theme}
-		{projection}
+		bind:theme={settings.theme}
+		bind:projection={settings.projection}
 		center={[12, 10]}
 		zoom={1.9}
 		onclick={(event) => {
@@ -322,16 +330,16 @@
 		{/snippet}
 
 		{#snippet children()}
-			{#if fxStars}
+			{#if settings.effects.stars}
 				<StarField count={110} seed={4} />
 			{/if}
-			{#if fxGlow}
+			{#if settings.effects.glow}
 				<GlobeGlow color={accentColour} />
 			{/if}
-			{#if fxGraticule}
+			{#if settings.effects.graticule}
 				<Graticule color={accentColour} />
 			{/if}
-			{#if fxRotate}
+			{#if settings.effects.autoRotate}
 				<AutoRotate degreesPerSecond={1.6} />
 			{/if}
 
@@ -398,19 +406,13 @@
 		{/snippet}
 	</Map>
 
-	<aside class="controls">
-		<h1>map-kit</h1>
+	<Controls
+		bind:theme={settings.theme}
+		bind:projection={settings.projection}
+		title="map-kit"
+		class="demo-controls"
+	>
 		<p class="status">{message}</p>
-
-		<label>
-			Theme
-			<select bind:value={themeName}>
-				{#each THEME_NAMES as name (name)}
-					<option value={name}>{name}</option>
-				{/each}
-				<option value="none">none (stock)</option>
-			</select>
-		</label>
 
 		<label>
 			Style
@@ -418,14 +420,6 @@
 				<option value="liberty">liberty</option>
 				<option value="positron">positron</option>
 				<option value="bright">bright</option>
-			</select>
-		</label>
-
-		<label>
-			Projection
-			<select bind:value={projection}>
-				<option value="globe">globe</option>
-				<option value="mercator">mercator</option>
 			</select>
 		</label>
 
@@ -444,12 +438,22 @@
 
 		<hr />
 		<p class="group">Globe effects</p>
-		<label class="check"><input type="checkbox" bind:checked={fxGlow} /> Atmosphere glow</label>
-		<label class="check"><input type="checkbox" bind:checked={fxStars} /> Star field</label>
-		<label class="check"><input type="checkbox" bind:checked={fxGraticule} /> Graticule</label>
-		<label class="check"><input type="checkbox" bind:checked={fxRotate} /> Idle auto-rotate</label>
-		<label class="check"><input type="checkbox" bind:checked={fxSweep} /> Sweep on fly-to</label>
-	</aside>
+		<label class="check">
+			<input type="checkbox" bind:checked={settings.effects.glow} /> Atmosphere glow
+		</label>
+		<label class="check">
+			<input type="checkbox" bind:checked={settings.effects.stars} /> Star field
+		</label>
+		<label class="check">
+			<input type="checkbox" bind:checked={settings.effects.graticule} /> Graticule
+		</label>
+		<label class="check">
+			<input type="checkbox" bind:checked={settings.effects.autoRotate} /> Idle auto-rotate
+		</label>
+		<label class="check">
+			<input type="checkbox" bind:checked={settings.effects.sweep} /> Sweep on fly-to
+		</label>
+	</Controls>
 </main>
 
 {#snippet labelPin(pin: Pin<SpotProps>, state: { selected: boolean; hovered: boolean })}
@@ -485,28 +489,9 @@
 		color: #8b949e;
 	}
 
-	.controls {
-		position: absolute;
-		top: 12px;
-		left: 12px;
-		z-index: 10;
+	/* <Controls> brings its own card; the demo only sets its width. */
+	:global(.demo-controls) {
 		width: 230px;
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		padding: 14px;
-		background: var(--mk-color-surface);
-		border: 1px solid var(--mk-color-border);
-		border-radius: var(--mk-radius-lg);
-		box-shadow: var(--mk-shadow-2);
-		font-size: var(--mk-font-size-sm);
-		color: var(--mk-color-text);
-	}
-
-	h1 {
-		margin: 0;
-		font-size: var(--mk-font-size-lg);
-		font-weight: var(--mk-font-weight-medium);
 	}
 
 	.status {

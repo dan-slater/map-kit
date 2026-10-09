@@ -26,12 +26,13 @@ type Props = {
     /**
      * Recolour the basemap from a small token set, and set the globe's
      * atmosphere. Pass one of the presets from `themes`, or your own.
-     * `null` leaves the style exactly as published.
+     * `null` leaves the style exactly as published. Two-way, so a settings
+     * UI can drive it.
      */
     theme?: BasemapTheme | null;
     /** Whether the user can pan, zoom and rotate. Reactive. */
     interactive?: boolean;
-    /** `'globe'` (the default), `'mercator'`, or a full projection spec. */
+    /** `'globe'` (the default), `'mercator'`, or a full projection spec. Two-way. */
     projection?: ProjectionName | ProjectionSpecification;
     /** The live MapLibre map. Bind to it to call MapLibre directly. */
     map?: MapLibreMap | null;
@@ -55,6 +56,6 @@ declare const Map: import("svelte").Component<Props, {
     flyTo: (flyOptions: FlyToOptions) => Promise<void>;
     getMap: () => MapLibreMap | null;
     ready: () => Promise<MapLibreMap>;
-}, "zoom" | "pitch" | "map" | "center" | "bearing" | "loaded">;
+}, "zoom" | "pitch" | "map" | "theme" | "projection" | "center" | "bearing" | "loaded">;
 type Map = ReturnType<typeof Map>;
 export default Map;

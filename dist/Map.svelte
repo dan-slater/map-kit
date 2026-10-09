@@ -35,12 +35,13 @@
 		/**
 		 * Recolour the basemap from a small token set, and set the globe's
 		 * atmosphere. Pass one of the presets from `themes`, or your own.
-		 * `null` leaves the style exactly as published.
+		 * `null` leaves the style exactly as published. Two-way, so a settings
+		 * UI can drive it.
 		 */
 		theme?: BasemapTheme | null;
 		/** Whether the user can pan, zoom and rotate. Reactive. */
 		interactive?: boolean;
-		/** `'globe'` (the default), `'mercator'`, or a full projection spec. */
+		/** `'globe'` (the default), `'mercator'`, or a full projection spec. Two-way. */
 		projection?: ProjectionName | ProjectionSpecification;
 		/** The live MapLibre map. Bind to it to call MapLibre directly. */
 		map?: MapLibreMap | null;
@@ -67,9 +68,9 @@
 		bearing = $bindable(0),
 		pitch = $bindable(0),
 		style = 'liberty',
-		theme = null,
+		theme = $bindable(null),
 		interactive = true,
-		projection = 'globe',
+		projection = $bindable('globe'),
 		map = $bindable(null),
 		loaded = $bindable(false),
 		options,
@@ -173,10 +174,14 @@
 		}
 	}
 
-	function applyProjection(m: MapLibreMap): void {
-		const spec = (
+	function projectionSpec(): ProjectionSpecification {
+		return (
 			typeof projection === 'string' ? { type: projection } : projection
 		) as ProjectionSpecification;
+	}
+
+	function applyProjection(m: MapLibreMap): void {
+		const spec = projectionSpec();
 		try {
 			if (m.getProjection()?.type === spec.type) return;
 			m.setProjection(spec);
@@ -193,12 +198,19 @@
 		// fetch the same URL anyway, so this costs nothing and avoids a flash
 		// of the stock cartography before the theme lands. Later changes go
 		// through setStyle's transformStyle, which needs no extra fetch.
-		void buildInitialStyle()
-			.then((initialStyle) => {
-				if (cancelled) return;
-				created = start(initialStyle);
-			})
-			.catch((error) => onerror?.(error));
+		void (async () => {
+			// Remember exactly what the map gets built from. The restyle effect
+			// below compares against this, so a theme change that lands while
+			// the style is still downloading is still applied afterwards.
+			const builtStyle = style;
+			const builtTheme = theme ?? null;
+			const initialStyle = await buildInitialStyle(builtStyle, builtTheme);
+			if (cancelled) return;
+			appliedStyle = builtStyle;
+			appliedTheme = builtTheme;
+			built = true;
+			created = start(initialStyle);
+		})().catch((error) => onerror?.(error));
 
 		return () => {
 			cancelled = true;
@@ -211,17 +223,20 @@
 		};
 	});
 
-	async function buildInitialStyle(): Promise<string | StyleSpecification> {
-		const resolved = resolveStyle(style);
-		if (!theme) return resolved;
-		if (typeof resolved !== 'string') return themeStyle(resolved, theme);
+	async function buildInitialStyle(
+		from: MapStyleInput,
+		withTheme: BasemapTheme | null
+	): Promise<string | StyleSpecification> {
+		const resolved = resolveStyle(from);
+		if (!withTheme) return resolved;
+		if (typeof resolved !== 'string') return themeStyle(resolved, withTheme);
 
 		const response = await fetch(resolved);
 		if (!response.ok) {
 			onerror?.(new Error(`[map-kit] could not fetch style ${resolved}: ${response.status}`));
 			return resolved;
 		}
-		return themeStyle((await response.json()) as StyleSpecification, theme);
+		return themeStyle((await response.json()) as StyleSpecification, withTheme);
 	}
 
 	function start(initialStyle: string | StyleSpecification): MapLibreMap {
@@ -300,28 +315,35 @@
 	// MapLibre has fetched the new style and before it diffs it against the
 	// current one, so the theme is applied without a second request and
 	// without tearing the sources down.
-	let appliedStyle = $state<MapStyleInput | null>(null);
-	let appliedTheme = $state<BasemapTheme | null>(null);
+	let appliedStyle: MapStyleInput | null = null;
+	let appliedTheme: BasemapTheme | null = null;
+	let built = $state(false);
 
 	$effect(() => {
 		const nextStyle = style;
 		const nextTheme = theme ?? null;
-		const m = instance;
+		// `map` rather than `instance`: this one is reactive, so the effect
+		// re-runs once the map exists. Reading a plain variable here meant the
+		// effect never saw the map appear, and the first theme change after
+		// load was swallowed by the guard that followed.
+		const m = built ? map : null;
 		if (!m || destroyed) return;
 
 		untrack(() => {
-			// Skip the first run: the map was built with this style already.
-			if (appliedStyle === null && appliedTheme === null) {
-				appliedStyle = nextStyle;
-				appliedTheme = nextTheme;
-				return;
-			}
 			if (appliedStyle === nextStyle && appliedTheme === nextTheme) return;
 			appliedStyle = nextStyle;
 			appliedTheme = nextTheme;
 
 			m.setStyle(resolveStyle(nextStyle), {
-				transformStyle: (_previous, next) => (nextTheme ? themeStyle(next, nextTheme) : next)
+				// Carry the projection into the incoming style rather than
+				// re-applying it afterwards. A style swap drops the projection,
+				// and putting it back from the `styledata` handler depends on
+				// timing that does not always come out right: switching theme
+				// once would silently leave the map on mercator.
+				transformStyle: (_previous, next) => ({
+					...(nextTheme ? themeStyle(next, nextTheme) : next),
+					projection: projectionSpec()
+				})
 			});
 		});
 	});

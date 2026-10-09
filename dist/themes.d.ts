@@ -36,3 +36,17 @@ export type ThemeName = keyof typeof themes;
 export declare const THEME_NAMES: ThemeName[];
 /** Look up a preset by name, falling back to `null` for an unknown one. */
 export declare function themeByName(name: string | null | undefined): BasemapTheme | null;
+/**
+ * The name of a preset, or `null` for `null` and for a theme of your own.
+ *
+ * Compares by identity, so it answers for the exported preset objects and for
+ * anything derived from one only if you kept the same object. A copy with a
+ * colour changed is a theme of your own, and gets `null`.
+ *
+ * One trap worth knowing: putting a theme in a deep `$state` wraps it in a
+ * proxy, and a proxy is not identical to the preset it wraps, so this returns
+ * `null` for it. Hold themes in `$state.raw`, which is what `mapSettings()`
+ * does. They are value objects and are never edited in place, so raw is the
+ * right kind of state for them anyway.
+ */
+export declare function themeNameOf(theme: BasemapTheme | null | undefined): ThemeName | null;

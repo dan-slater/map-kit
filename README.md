@@ -495,6 +495,100 @@ match. Both are explained, with the measured numbers and every option, in
 | `useMap()`, `useMapOptional()` | Reach the enclosing `<Map>` from your own component. |
 | `OPENFREEMAP_STYLES`, `resolveStyle` | The three style URLs. |
 
+## Settings and controls
+
+**map-kit ships no settings UI by default.** Every app wants its controls to
+look like the rest of that app, and a library that insists on its own panel
+gets fought rather than used. What it ships instead is three things, and you
+can take as few as you like.
+
+### 1. Bindable props
+
+`theme`, `projection`, `center`, `zoom`, `bearing` and `pitch` are all two-way
+on `<Map>`. If you already have somewhere to keep state, that is the whole
+integration:
+
+```svelte
+<script lang="ts">
+  import { Map, themes } from '@dan-slater/map-kit';
+  let theme = $state(themes.ink);
+  let projection = $state<'globe' | 'mercator'>('globe');
+</script>
+
+<Map bind:theme bind:projection />
+<button onclick={() => (theme = themes.paper)}>Paper</button>
+```
+
+### 2. `mapSettings()`, a headless store
+
+Somewhere to keep the handful of things a settings UI changes, with the
+derived parts worked out. It touches no DOM, no URL and no storage.
+
+```svelte
+<script lang="ts">
+  import { Map, GlobeGlow, mapSettings } from '@dan-slater/map-kit';
+  const settings = mapSettings({ theme: 'ink', effects: { glow: true } });
+</script>
+
+<div style={settings.tokens}>
+  <Map bind:theme={settings.theme} bind:projection={settings.projection}>
+    {#snippet children()}
+      {#if settings.effects.glow}<GlobeGlow />{/if}
+    {/snippet}
+  </Map>
+</div>
+```
+
+| Member | Notes |
+| --- | --- |
+| `theme` | The theme object. Two-way. |
+| `themeName` | The preset's name, or `null` for no theme or one of your own. Assigning a name sets the theme. |
+| `projection` | `'globe'` or `'mercator'`. Two-way. |
+| `effects` | `{ glow, stars, graticule, autoRotate, sweep }`, all `false`. Mutate directly. |
+| `tokens` | The theme's `--mk-` declarations, for a `style` attribute. |
+
+Persisting the settings, or putting them in a query string, is a handful of
+lines and stays in your app. The demo syncs them to the URL that way.
+
+A note if you hold a theme in your own state: use `$state.raw`. Deep `$state`
+wraps the object in a proxy, and a proxy is not identical to the preset it
+wraps, so `themeNameOf` would stop recognising it. Themes are value objects
+that get replaced rather than edited, so raw is the right state for them.
+
+### 3. `<Controls>`, optional and stock
+
+One small panel with a theme picker, a globe/map toggle and a slot for your
+own controls. Everything visible comes from `--mk-` tokens, so it follows
+whichever theme is selected.
+
+```svelte
+<Map bind:theme={settings.theme} bind:projection={settings.projection}>
+  {#snippet children()}
+    <Controls
+      bind:theme={settings.theme}
+      bind:projection={settings.projection}
+      title="Map"
+      position="top-left"
+    >
+      <label><input type="checkbox" bind:checked={settings.effects.glow} /> Glow</label>
+    </Controls>
+  {/snippet}
+</Map>
+```
+
+| Prop | Default | Notes |
+| --- | --- | --- |
+| `theme`, `projection` | | Two-way. |
+| `themes` | the four presets | Which themes to offer. |
+| `allowNoTheme` | `true` | Offer a "none" option. |
+| `title` | none | Heading. |
+| `position` | `'top-left'` | Corner, when placed inside `<Map>`. |
+| `showTheme`, `showProjection` | `true` | Drop either half. |
+| `children` | none | Your own controls, below the built-in ones. |
+
+A theme you supplied by hand shows as "custom" rather than claiming to be one
+of the presets.
+
 ## Theming the basemap
 
 The stock OpenFreeMap styles are general-purpose cartography: many hues, tuned

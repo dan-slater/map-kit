@@ -21,6 +21,13 @@ read the Fixed entry before upgrading.
   match what was asked for, so the contract holds against a tileset that winds
   the other way. `stats.detectedWaterSide` and `stats.reversed` report what
   happened. The default matches OpenFreeMap, so it reverses nothing.
+- **A settings pattern, without a settings UI.** `theme` and `projection` are
+  now two-way on `<Map>`; `mapSettings()` is a headless runes store holding
+  the theme, projection, effect toggles and derived `--mk-` tokens; and
+  `<Controls>` is one optional stock panel, themed by the tokens, with a slot
+  for your own controls. Take as few of the three as you like.
+- `themeNameOf(theme)` names a preset, or returns `null` for a theme of your
+  own.
 - **Globe effects**, five of them, each opt-in and off by default: they do
   nothing until mounted, so a client data map can take one and skip the rest.
   `<GlobeGlow>` traces a rim of light around the limb in any colour, fading
@@ -96,6 +103,15 @@ read the Fixed entry before upgrading.
 
 ### Fixed
 
+- **The first theme change after load was silently ignored.** `<Map>`'s
+  restyle effect read a non-reactive variable to find the map, so it never ran
+  when the map appeared; the first real change then hit the guard meant for
+  the initial render and was swallowed. Changing theme twice worked, which is
+  why it survived the first round of screenshots.
+- **A style change dropped the projection**, leaving a globe map on mercator.
+  Putting the projection back from the `styledata` handler depended on timing
+  that did not always come out right, so it is now carried into the incoming
+  style by `transformStyle`.
 - **A git-tag install produced a package with no `dist`.** Up to 0.1.0 the
   `prepare` script built `dist` on install. That cannot work: a git dependency
   installs only its `dependencies`, so `svelte-package` (a devDependency) is

@@ -266,6 +266,68 @@ console.log(
 );
 await page.screenshot({ path: `${shotDir}/05-panned.png` });
 
+// <Controls> and mapSettings, driven the way a person would. Each of these
+// caught a real bug: the theme name going null through a $state proxy, the
+// first theme change after load being swallowed, and the projection being
+// dropped by setStyle.
+console.log('\n=== settings ===');
+await page.goto(url, { waitUntil: 'load' });
+await page.waitForFunction(() => Boolean(window.mapkit?.settings), null, { timeout: 60_000 });
+await page.waitForFunction(() => window.mapkit.map.loaded(), null, { timeout: 60_000 });
+await page.waitForTimeout(2000);
+
+const readSettings = () =>
+	page.evaluate(() => ({
+		themeName: window.mapkit.settings.themeName,
+		projection: window.mapkit.map.getProjection?.()?.type ?? 'unset',
+		water: window.mapkit.map
+			.getStyle()
+			.layers.find((l) => l['source-layer'] === 'water' && l.type === 'fill')?.paint['fill-color'],
+		search: location.search
+	}));
+
+const start = await readSettings();
+console.log(`  initial: theme=${start.themeName} projection=${start.projection} water=${start.water}`);
+if (start.themeName !== 'ink') {
+	console.log('  FAIL: the demo did not start on ink');
+	failures++;
+}
+if (!start.search.includes('theme=ink')) {
+	console.log(`  FAIL: the url should carry the theme, got "${start.search}"`);
+	failures++;
+}
+
+await page.getByRole('button', { name: 'Map', exact: true }).click();
+await page.waitForTimeout(1200);
+const mercator = await readSettings();
+console.log(`  after the Map toggle: projection=${mercator.projection}`);
+if (mercator.projection !== 'mercator') {
+	console.log('  FAIL: <Controls> did not switch the projection');
+	failures++;
+}
+
+await page.getByRole('button', { name: 'Globe', exact: true }).click();
+await page.waitForTimeout(1200);
+
+await page.locator('.mk-controls select').first().selectOption('paper');
+await page.waitForTimeout(3000);
+const papered = await readSettings();
+console.log(
+	`  after choosing paper: theme=${papered.themeName} projection=${papered.projection} water=${papered.water}`
+);
+if (papered.themeName !== 'paper') {
+	console.log('  FAIL: the store did not record the new theme');
+	failures++;
+}
+if (papered.water === start.water) {
+	console.log('  FAIL: the basemap did not restyle on the first theme change');
+	failures++;
+}
+if (papered.projection !== 'globe') {
+	console.log('  FAIL: the projection was lost when the style changed');
+	failures++;
+}
+
 if (consoleErrors.length > 0) {
 	console.log('\nconsole errors:');
 	for (const error of consoleErrors.slice(0, 12)) console.log(`  ${error}`);
