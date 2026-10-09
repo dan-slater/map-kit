@@ -114,12 +114,15 @@
 	let projection = $state<'globe' | 'mercator'>('globe');
 	let labelledPins = $state(false);
 
-	// ?theme=ink picks a basemap theme on load, so a link can carry one.
+	// ink is the chosen default. ?theme=<name> overrides it, so a link can
+	// carry a look; ?theme=none shows the stock OpenFreeMap cartography.
+	const DEFAULT_THEME: ThemeName = 'ink';
+
 	const initialTheme = (() => {
-		if (typeof window === 'undefined') return 'ink';
+		if (typeof window === 'undefined') return DEFAULT_THEME;
 		const requested = new URLSearchParams(window.location.search).get('theme');
 		if (requested === 'none') return 'none';
-		return themeByName(requested) ? (requested as ThemeName) : 'ink';
+		return themeByName(requested) ? (requested as ThemeName) : DEFAULT_THEME;
 	})();
 
 	let themeName = $state<ThemeName | 'none'>(initialTheme);

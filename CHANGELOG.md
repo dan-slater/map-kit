@@ -31,7 +31,9 @@ read the Fixed entry before upgrading.
   layer, including a consumer's own and any source-layer OpenMapTiles adds
   later, is passed through untouched rather than recoloured by guesswork or
   dropped.
-- Four presets in `themes`: `ink`, `paper`, `chart` and `mono`. Each carries
+- Four presets in `themes`: `ink`, `paper`, `chart` and `mono`. `ink` is the
+  demo's default; `<Map theme>` still defaults to `null`, so installing
+  map-kit never changes an app's cartography on its own. Each carries
   matching `--mk-` overrides, which `tokensFor(theme)` returns as a CSS
   declaration list so the pins and panel follow the basemap.
 - `--mk-map-background` paints behind the map canvas. Under globe projection

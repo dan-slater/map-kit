@@ -409,7 +409,7 @@ list, so it drops straight into a `style` attribute.
 
 | | |
 | --- | --- |
-| `ink` | Deep navy ocean, near-black land, a teal coastline glow and coral pins. Sparse cool-grey labels. For a dark product UI. |
+| `ink` **(default in the demo)** | Deep navy ocean, near-black land, a teal coastline glow and coral pins. Sparse cool-grey labels. For a dark product UI. |
 | `paper` | Warm off-white land, pale blue-grey water, hairline ink coasts, italic labels, faint shaded relief. Editorial. |
 | `chart` | Nautical chart: cream land, pale cyan water, navy coast and dashed boundaries, spaced capitals. |
 | `mono` | One dark, one light, nothing else. No roads, no labels, no atmosphere. Reads as a graphic. |
@@ -421,7 +421,9 @@ list, so it drops straight into a `style` attribute.
 <Map theme={themes.mono} />    <!-- duotone graphic -->
 ```
 
-See them at `docs/img/themes/`, three views each.
+See them at `docs/img/themes/`, three views each. The demo ships with `ink`;
+`<Map>` itself still defaults to no theme, so adding map-kit to an app never
+changes its cartography until you ask.
 
 ### The theme tokens
 
