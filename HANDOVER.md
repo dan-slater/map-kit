@@ -1,18 +1,95 @@
 # HANDOVER
 
-Last updated: 2026-10-09, after two upstream fixes from the surf-lab line.
+Last updated: 2026-10-09, after ink was picked and the globe effects and
+settings pattern landed.
 
 ## State
 
-`v0.1.0` is tagged and on GitHub. Everything since is unreleased 0.1.x work,
-recorded in `CHANGELOG.md` under 0.1.1. **It is no longer purely additive**:
-`result.waterSide` now reads `'right'` where it read `'left'`, because the old
-label was wrong. Read the Fixed section of the changelog before tagging.
+`v0.1.0` is tagged and on GitHub; main is at the settings commit. Everything
+since 0.1.0 is unreleased 0.1.1 work, recorded in `CHANGELOG.md`. **It is not
+purely additive**: `result.waterSide` now reads `'right'` where it read
+`'left'`, because the old label was wrong. Read the Fixed section before
+tagging.
 
-Waiting on Daniel: **pick a basemap theme.** Four presets are rendered at three
-views each in `docs/img/themes/`. The demo switcher is live, so
-`http://127.0.0.1:5180/?theme=chart` flicks between them (`ink`, `paper`,
-`chart`, `mono`, `none`). The demo currently defaults to `ink`.
+Nothing is blocked. The control plane pushes and tags.
+
+## This round
+
+**ink is the demo default.** `<Map theme>` still defaults to `null`, so
+installing map-kit never changes an app's cartography on its own.
+
+**Five globe effects, all opt-in and off by default**, so a client data map
+can take the glow and skip the spinning: `<GlobeGlow>` (a rim of light at the
+limb, in any colour, which MapLibre's style-driven `sky` cannot do),
+`<Graticule>` (meridians and parallels as a `<Layer>`, fading out with zoom),
+`<AutoRotate>`, `<StarField>` (a CSS background behind the canvas, the one
+place something can sit *behind* the globe) and `sweepTo`.
+
+Measured rather than eyeballed: `<AutoRotate>` moved 0 degrees during its idle
+window, 4.053 degrees over 2.5 s at a configured 1.6 deg/s, 0 degrees after a
+drag, then resumed. Shots in `docs/img/themes/ink-fx-*.png`.
+
+**A settings pattern with no settings UI.** `theme` and `projection` are
+two-way on `<Map>`; `mapSettings()` is a headless store; `<Controls>` is one
+optional stock panel. Take as few of the three as you like. The demo uses all
+three and syncs to the URL itself, because persistence is the app's business.
+
+### Three bugs the settings work caught
+
+Writing a browser check that drove `<Controls>` the way a person would turned
+up three real faults, none of which the screenshots had shown:
+
+- **The first theme change after load was ignored.** `<Map>`'s restyle effect
+  read a non-reactive variable to find the map, so it never ran when the map
+  appeared; the first real change then hit the guard meant for the initial
+  render and was swallowed. Changing theme *twice* worked, which is exactly
+  why the theme screenshots looked fine.
+- **A style change dropped the projection**, leaving the globe on mercator.
+  Re-applying it from `styledata` depended on timing that did not always come
+  out right, so the projection is now carried into the incoming style by
+  `transformStyle`.
+- **`themeName` went null for a theme held in `$state`.** Deep `$state` wraps
+  the object in a proxy, and a proxy is not identical to the preset it wraps,
+  so identity comparison failed. `mapSettings` holds themes in `$state.raw`,
+  which is right anyway since a theme is replaced rather than edited. Written
+  up in `themeNameOf`'s doc comment, because any consumer can hit it.
+
+That check now lives in `scripts/verify.mjs` as a permanent guard rather than
+in a scratch file.
+
+## Latest verification
+
+```
+bun run check      ->  371 FILES 0 ERRORS 0 WARNINGS
+bun test           ->  108 pass, 0 fail, 8466 expect() calls
+bun run build      ->  src/lib -> dist
+bun run check:dist ->  clean
+bunx publint       ->  All good!
+bun scripts/verify.mjs  ->  RESULT: pass
+    water verified on the right for 60/60, 45/45 and 60/60 segments
+    settings: theme=ink projection=globe, Map toggle -> mercator,
+              choosing paper -> theme=paper projection=globe water=#ccd8e0
+bun scripts/fx-shots.mjs ->  3 shots, all within the 400 KB budget
+```
+
+Demo on `127.0.0.1:5180` in tmux `mapkit-dev`. Scratch Kit 3 consumer in
+`~/orch-scratch/mapkit-consumer`, tmux `mapkit-consumer`.
+
+**`scripts/verify-webgpu.ts` still cannot complete on the GPU path on this
+box**, and it is not map-kit's doing: under the Vulkan flags MapLibre's own
+WebGL fragment shader fails to compile, which kills the basemap on every route
+including `/`. On `--swiftshader` the same build gets a real `GPUDevice` with
+working queue and limits, which is what says the `<Overlay>` code is fine. The
+GPU path passed in full earlier today with unchanged overlay code.
+
+`coastlineNear` output is unchanged by this work, at zoom 14, 2 km radius,
+`classes: ['ocean']`:
+
+| Place | Polylines | Longest | Vertices | Span |
+| --- | --- | --- | --- | --- |
+| J-Bay | 3 | 4332 m | 133 | 641 x 3874 m |
+| Nazaré | 19 | 2894 m | 58 | 988 x 2081 m |
+| Mundaka | 7 | 4562 m | 145 | 1736 x 1725 m |
 
 ## The two upstream fixes
 
@@ -296,30 +373,28 @@ bathymetry either. No preset uses it, and a test asserts none does. The
 
 ## What is next
 
-1. **Daniel picks a theme.** Then make it the demo default and say so in the
-   README. If none of the four land, the quickest lever is a copy of `paper`
-   or `ink` with different `water`, `land` and `coastline`.
-2. **Push and tag 0.1.1.** surf-lab needs it for the installable `dist` and the
+1. **Push and tag 0.1.1.** surf-lab needs it for the installable `dist` and the
    corrected winding label. Needs the control plane; `git push` is denied here.
    The winding label change is not backwards compatible, so the tag note should
    say so.
-3. **Re-run `scripts/verify-webgpu.ts` on the GPU path** once the box's
+2. **Re-run `scripts/verify-webgpu.ts` on the GPU path** once the box's
    ANGLE/Vulkan state is healthy again. Nothing in map-kit changed, but the
    full GPU proof is currently stale.
-4. **`<Pins>` at scale** is still DOM-based, fine for tens or low hundreds.
+3. **`<Pins>` at scale** is still DOM-based, fine for tens or low hundreds.
    A client map with thousands of competitor pins wants the `<Layer>` route,
    which is documented but not demonstrated.
-5. **Clustering is undemonstrated.** `<Layer>` passes `cluster: true` through
+4. **Clustering is undemonstrated.** `<Layer>` passes `cluster: true` through
    to the source, but nothing in the demo or docs shows it working.
-6. **Nazaré still returns 19 polylines.** The dominant one is 2894 m and
+5. **Nazaré still returns 19 polylines.** The dominant one is 2894 m and
    usable. A 2 km circle there holds breakwaters, a harbour mouth and a river,
    so the fragments may be real. Worth confirming against surf-lab before
    tuning further.
 
 ## Open questions for Daniel
 
-- Which theme, and does the chosen one want a tweak before it becomes the
-  default?
+- Anything to tune on ink now it is the default, or on the globe effects?
+  They are all off by default in the package; the demo turns none on unless
+  `?fx=` asks.
 
 ## Box notes
 
