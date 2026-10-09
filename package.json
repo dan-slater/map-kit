@@ -42,6 +42,7 @@
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@types/geojson": "^7946.0.16",
     "maplibre-gl": "^5.9.0",
+    "playwright": "^1.64.0",
     "publint": "^0.3.14",
     "svelte": "^5.42.2",
     "svelte-check": "^4.3.3",

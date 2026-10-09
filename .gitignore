@@ -3,3 +3,4 @@ dist
 .svelte-kit
 .DS_Store
 *.log
+shots

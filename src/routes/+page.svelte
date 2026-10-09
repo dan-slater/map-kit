@@ -8,6 +8,7 @@
 		Pins,
 		circle,
 		coastlineNear,
+		enuFrame,
 		flyTo,
 		type CoastlineResult,
 		type MapStyleName,
@@ -228,6 +229,12 @@
 		void selectedPin;
 		overlayFrame?.requestRedraw('manual');
 	});
+
+	// A handle for the headless browser harness in scripts/verify.mjs. Dev only.
+	$effect(() => {
+		if (!import.meta.env.DEV || !map) return;
+		Object.assign(window, { mapkit: { map, coastlineNear, flyTo, enuFrame, spots } });
+	});
 </script>
 
 <svelte:head>
@@ -240,7 +247,7 @@
 		{style}
 		{projection}
 		center={[12, 10]}
-		zoom={1.5}
+		zoom={1.9}
 		onclick={(event) => {
 			message = `Clicked ${event.lat.toFixed(4)}, ${event.lon.toFixed(4)}`;
 		}}
