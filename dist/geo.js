@@ -62,6 +62,24 @@ export function wrapLongitude(lon) {
     const wrapped = ((lon + 180) % 360 + 360) % 360;
     return wrapped - 180;
 }
+/**
+ * The point an angular distance away along a great circle, on a sphere.
+ *
+ * `angularDegrees` is an angle at the centre of the earth, not a distance:
+ * 90 is a quarter of the way round, which is the silhouette of a globe seen
+ * from infinitely far away. `bearingDegrees` is clockwise from north.
+ */
+export function destination(lon, lat, angularDegrees, bearingDegrees) {
+    const angular = angularDegrees * DEG;
+    const bearing = bearingDegrees * DEG;
+    const lat1 = lat * DEG;
+    const lon1 = lon * DEG;
+    const sinLat2 = Math.sin(lat1) * Math.cos(angular) + Math.cos(lat1) * Math.sin(angular) * Math.cos(bearing);
+    const lat2 = Math.asin(Math.max(-1, Math.min(1, sinLat2)));
+    const y = Math.sin(bearing) * Math.sin(angular) * Math.cos(lat1);
+    const x = Math.cos(angular) - Math.sin(lat1) * sinLat2;
+    return [wrapLongitude((lon1 + Math.atan2(y, x)) / DEG), lat2 / DEG];
+}
 /** Great-circle distance in metres between two points, spherical earth. */
 export function distanceMeters(aLon, aLat, bLon, bLat) {
     const R = 6371008.8; // mean earth radius

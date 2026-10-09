@@ -316,6 +316,117 @@ it fire every frame. `mode="webgpu"` configures a WebGPU context instead of a
 The full contract, including coordinate conventions, the redraw lifecycle and
 the WebGPU details, is in **[docs/overlay.md](docs/overlay.md)**.
 
+## Globe effects
+
+Five small components and one camera helper that make the globe feel less like
+a map and more like a planet. **Every one is opt-in and off by default**: they
+do nothing until you mount them, so a client data map can take the glow and
+skip the spinning.
+
+```svelte
+<script lang="ts">
+  import { Map, GlobeGlow, StarField, Graticule, AutoRotate, themes } from '@dan-slater/map-kit';
+</script>
+
+<Map theme={themes.ink}>
+  {#snippet children()}
+    <StarField />
+    <GlobeGlow color="#2f8f8f" />
+    <Graticule color="#2f8f8f" />
+    <AutoRotate degreesPerSecond={1.6} />
+  {/snippet}
+</Map>
+```
+
+See `docs/img/themes/ink-fx-*.png`, or try them live:
+`?theme=ink&fx=glow,stars,graticule,rotate`.
+
+### `<GlobeGlow>`
+
+A rim of light around the planet, fading into space. MapLibre's own `sky`
+paints an atmosphere, but it is a wash across the whole sky dome rather than a
+band hugging the limb, and its colour comes from the style. This draws the
+band, in whatever colour you give it, and only ever paints outside the globe.
+
+| Prop | Default | Notes |
+| --- | --- | --- |
+| `color` | `'#2f8f8f'` | Pass your theme's accent. |
+| `intensity` | `0.55` | Peak opacity. |
+| `thickness` | `0.12` | Band width as a fraction of the globe's radius. |
+| `maxZoom` | `5` | Above this the limb is off-screen; it stops drawing. |
+
+Globe projection only. Under mercator it draws nothing.
+
+### `<Graticule>`
+
+Meridians and parallels as a hairline grid, built as a `<Layer>` so MapLibre
+curves it onto the globe. The lines fade out as you zoom in, because a
+graticule is orientation at a glance and clutter once you are looking at a
+town.
+
+| Prop | Default | Notes |
+| --- | --- | --- |
+| `step` | `10` | Spacing in degrees. |
+| `color`, `width`, `opacity` | `'#4a6070'`, `0.5`, `0.35` | |
+| `fadeFromZoom`, `fadeToZoom` | `3`, `6` | Full strength, then gone. |
+| `visible` | `true` | Two-way. |
+
+`graticuleGeoJSON({ step })` is exported if you want the geometry for
+something else. Each feature carries `kind` (`'meridian'` or `'parallel'`) and
+`degrees`, so a filter can pick out the equator.
+
+### `<AutoRotate>`
+
+Spins the globe slowly while nobody is touching it. Renders nothing.
+
+The rule that matters is that it never fights the user: any interaction stops
+it at once, and it only resumes after the map has been still for `idleMs`. It
+also stands down when the document is hidden, so a background tab is not
+burning frames.
+
+| Prop | Default | Notes |
+| --- | --- | --- |
+| `enabled` | `true` | Mount the component to opt in; this is for toggling it afterwards. |
+| `degreesPerSecond` | `2` | Negative spins the other way. |
+| `idleMs` | `4000` | Stillness required before it resumes. |
+| `maxZoom` | `4` | Above this a spin is disorienting, so it stops. |
+| `onchange` | none | `(spinning: boolean)`, for a UI indicator. |
+
+### `<StarField>`
+
+Stars behind the planet, as a CSS background on the element MapLibre draws
+into. That is the one place something can sit *behind* the globe: anything
+rendered as a child of `<Map>` is above the canvas and would cover it.
+
+It costs nothing per frame, and it is deterministic for a given `seed`, so the
+sky does not twinkle on re-render. The field does not move with the camera,
+which is the honest trade for a static background image.
+
+| Prop | Default | Notes |
+| --- | --- | --- |
+| `count`, `tile` | `90`, `420` | Stars per tile, and the repeat interval in CSS pixels. |
+| `color`, `maxRadius`, `maxOpacity` | `'#ffffff'`, `1.1`, `0.85` | |
+| `seed` | `1` | Same seed, same sky. |
+
+`starFieldDataUri(options)` is exported if you want the image elsewhere.
+
+### `sweepTo`
+
+`flyTo` with a lean: it pitches the camera over for the journey, takes a wider
+arc than the shortest path, and straightens up on arrival.
+
+```ts
+import { sweepTo } from '@dan-slater/map-kit';
+
+await sweepTo(map, { lon: 24.9338, lat: -34.0308, zoom: 9 });
+```
+
+It is two moves, not one. MapLibre interpolates pitch linearly across a
+`flyTo` and gives no hook to shape it, so a single call cannot rise and fall
+again; `sweepTo` flies pitched, then eases back. `sweepPitch` (45),
+`settlePitch` (0) and `settleDuration` (900 ms) control it, and everything
+`flyTo` takes is accepted too. It resolves when the camera settles.
+
 ## Helpers
 
 ### `flyTo(map, options)`

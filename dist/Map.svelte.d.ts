@@ -55,6 +55,6 @@ declare const Map: import("svelte").Component<Props, {
     flyTo: (flyOptions: FlyToOptions) => Promise<void>;
     getMap: () => MapLibreMap | null;
     ready: () => Promise<MapLibreMap>;
-}, "zoom" | "map" | "center" | "pitch" | "bearing" | "loaded">;
+}, "zoom" | "pitch" | "map" | "center" | "bearing" | "loaded">;
 type Map = ReturnType<typeof Map>;
 export default Map;

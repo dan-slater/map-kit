@@ -21,7 +21,19 @@ read the Fixed entry before upgrading.
   match what was asked for, so the contract holds against a tileset that winds
   the other way. `stats.detectedWaterSide` and `stats.reversed` report what
   happened. The default matches OpenFreeMap, so it reverses nothing.
-- **Basemap theming.** `themeStyle(style, theme)` recolours an OpenMapTiles
+- **Globe effects**, five of them, each opt-in and off by default: they do
+  nothing until mounted, so a client data map can take one and skip the rest.
+  `<GlobeGlow>` traces a rim of light around the limb in any colour, fading
+  into space, which MapLibre's style-driven `sky` cannot do. `<Graticule>`
+  draws meridians and parallels as a `<Layer>` that fades out with zoom.
+  `<AutoRotate>` spins the globe while nobody is touching it, stops on any
+  interaction, resumes after `idleMs`, and stands down when the tab is hidden.
+  `<StarField>` puts a deterministic star field behind the planet as a CSS
+  background, at no per-frame cost. `sweepTo` flies pitched and straightens up
+  on arrival.
+- `graticuleGeoJSON`, `starFieldDataUri` and `destination` are exported, so the
+  geometry and the image behind the effects are usable on their own.
+- - **Basemap theming.** `themeStyle(style, theme)` recolours an OpenMapTiles
   style from a small token set, and `<Map theme={...}>` applies it. Colours are
   rewritten inside whatever expression the style already uses, so a
   zoom-interpolated colour keeps its stops and its interpolation, and alpha is

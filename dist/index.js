@@ -11,15 +11,22 @@ export { default as Pins } from './Pins.svelte';
 export { default as Panel } from './Panel.svelte';
 export { default as Layer } from './Layer.svelte';
 export { default as Overlay } from './Overlay.svelte';
+// Globe effects. Each is opt-in: nothing happens until you mount it.
+export { default as GlobeGlow } from './GlobeGlow.svelte';
+export { default as Graticule } from './Graticule.svelte';
+export { default as AutoRotate } from './AutoRotate.svelte';
+export { default as StarField } from './StarField.svelte';
 // Camera
-export { flyTo } from './flyTo.js';
+export { flyTo, sweepTo } from './flyTo.js';
 // Geometry
-export { enuFrame, wrapLongitude, distanceMeters, polylineLength, simplifyPolyline } from './geo.js';
+export { enuFrame, destination, wrapLongitude, distanceMeters, polylineLength, simplifyPolyline } from './geo.js';
 // Tile queries
 export { coastlineNear, vectorSourceIds } from './coastline.js';
 // Map helpers
 export { metersPerPixel, isLocationOccluded, waitForIdle } from './mapUtils.js';
 // GeoJSON helpers
+export { graticuleGeoJSON } from './graticule.js';
+export { starFieldDataUri } from './starfield.js';
 export { circle, points, linesFromMeters, cssToken } from './shapes.js';
 // Styles
 export { OPENFREEMAP_STYLES, resolveStyle } from './styles.js';

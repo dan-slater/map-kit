@@ -6,11 +6,16 @@
 		Overlay,
 		Panel,
 		Pins,
+		AutoRotate,
+		GlobeGlow,
+		Graticule,
+		StarField,
 		THEME_NAMES,
 		circle,
 		coastlineNear,
 		enuFrame,
 		flyTo,
+		sweepTo,
 		themeByName,
 		themes,
 		tokensFor,
@@ -125,6 +130,21 @@
 		return themeByName(requested) ? (requested as ThemeName) : DEFAULT_THEME;
 	})();
 
+	// Globe effects are all opt-in and all off by default, here and in the
+	// package. ?fx=glow,stars,graticule,rotate,sweep turns them on, so a link
+	// can carry a look and the screenshot script needs no special casing.
+	const requestedEffects = (() => {
+		if (typeof window === 'undefined') return new Set<string>();
+		const raw = new URLSearchParams(window.location.search).get('fx') ?? '';
+		return new Set(raw.split(',').map((part) => part.trim()).filter(Boolean));
+	})();
+
+	let fxGlow = $state(requestedEffects.has('glow'));
+	let fxStars = $state(requestedEffects.has('stars'));
+	let fxGraticule = $state(requestedEffects.has('graticule'));
+	let fxRotate = $state(requestedEffects.has('rotate'));
+	let fxSweep = $state(requestedEffects.has('sweep'));
+
 	let themeName = $state<ThemeName | 'none'>(initialTheme);
 	const theme = $derived(themeName === 'none' ? null : themes[themeName]);
 	const themeTokens = $derived(theme ? tokensFor(theme) : '');
@@ -139,6 +159,15 @@
 		if (typeof window === 'undefined') return;
 		const url = new URL(window.location.href);
 		url.searchParams.set('theme', themeName);
+		const on = [
+			fxGlow && 'glow',
+			fxStars && 'stars',
+			fxGraticule && 'graticule',
+			fxRotate && 'rotate',
+			fxSweep && 'sweep'
+		].filter(Boolean) as string[];
+		if (on.length > 0) url.searchParams.set('fx', on.join(','));
+		else url.searchParams.delete('fx');
 		history.replaceState(null, '', url);
 	});
 
@@ -166,7 +195,9 @@
 		message = pin
 			? `${pin.props?.name}. Run the coastline query to read the shoreline here.`
 			: 'Pick a pin, then run the coastline query.';
-		if (pin && map) void flyTo(map, { lon: pin.lon, lat: pin.lat, zoom: 9, duration: 1800 });
+		if (!pin || !map) return;
+		if (fxSweep) void sweepTo(map, { lon: pin.lon, lat: pin.lat, zoom: 9 });
+		else void flyTo(map, { lon: pin.lon, lat: pin.lat, zoom: 9, duration: 1800 });
 	}
 
 	async function runCoastline() {
@@ -291,6 +322,19 @@
 		{/snippet}
 
 		{#snippet children()}
+			{#if fxStars}
+				<StarField count={110} seed={4} />
+			{/if}
+			{#if fxGlow}
+				<GlobeGlow color={accentColour} />
+			{/if}
+			{#if fxGraticule}
+				<Graticule color={accentColour} />
+			{/if}
+			{#if fxRotate}
+				<AutoRotate degreesPerSecond={1.6} />
+			{/if}
+
 			<Layer
 				id="radius-ring"
 				data={ring}
@@ -397,6 +441,14 @@
 		<label class="check"><input type="checkbox" bind:checked={showRing} /> Radius ring layer</label>
 		<label class="check"><input type="checkbox" bind:checked={labelledPins} /> Label pins</label>
 		<label class="check"><input type="checkbox" bind:checked={oceanOnly} /> Ocean class only</label>
+
+		<hr />
+		<p class="group">Globe effects</p>
+		<label class="check"><input type="checkbox" bind:checked={fxGlow} /> Atmosphere glow</label>
+		<label class="check"><input type="checkbox" bind:checked={fxStars} /> Star field</label>
+		<label class="check"><input type="checkbox" bind:checked={fxGraticule} /> Graticule</label>
+		<label class="check"><input type="checkbox" bind:checked={fxRotate} /> Idle auto-rotate</label>
+		<label class="check"><input type="checkbox" bind:checked={fxSweep} /> Sweep on fly-to</label>
 	</aside>
 </main>
 
@@ -481,6 +533,19 @@
 		border-radius: var(--mk-radius-sm);
 		background: var(--mk-color-surface);
 		color: inherit;
+	}
+
+	hr {
+		width: 100%;
+		margin: 2px 0;
+		border: 0;
+		border-top: 1px solid var(--mk-color-border);
+	}
+
+	.group {
+		margin: 0;
+		color: var(--mk-color-text-muted);
+		font-size: var(--mk-font-size-sm);
 	}
 
 	.facts {

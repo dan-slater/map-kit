@@ -46,6 +46,14 @@ export type EnuFrame = {
 export declare function enuFrame(lat0: number, lon0: number): EnuFrame;
 /** Wrap a longitude (or a longitude difference) into `[-180, 180)`. */
 export declare function wrapLongitude(lon: number): number;
+/**
+ * The point an angular distance away along a great circle, on a sphere.
+ *
+ * `angularDegrees` is an angle at the centre of the earth, not a distance:
+ * 90 is a quarter of the way round, which is the silhouette of a globe seen
+ * from infinitely far away. `bearingDegrees` is clockwise from north.
+ */
+export declare function destination(lon: number, lat: number, angularDegrees: number, bearingDegrees: number): LonLat;
 /** Great-circle distance in metres between two points, spherical earth. */
 export declare function distanceMeters(aLon: number, aLat: number, bLon: number, bLat: number): number;
 /** Total length in metres of a polyline given in tangent-plane metres. */

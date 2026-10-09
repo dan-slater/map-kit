@@ -71,3 +71,46 @@ export function flyTo(map: MapLibreMap, options: FlyToOptions): Promise<void> {
 		map.once('moveend', () => resolve());
 	});
 }
+
+export type SweepToOptions = FlyToOptions & {
+	/** Pitch held during the flight, degrees. Default 45. */
+	sweepPitch?: number;
+	/** Pitch to settle at once the flight lands. Default 0. */
+	settlePitch?: number;
+	/** How long the settle takes, milliseconds. Default 900. */
+	settleDuration?: number;
+};
+
+/**
+ * Fly somewhere with a bit of drama: lean the camera over for the journey,
+ * take a wider arc than the shortest path, then straighten up on arrival.
+ *
+ * It is two moves, not one. MapLibre interpolates pitch linearly across a
+ * `flyTo` and gives no hook to shape it, so a single call cannot rise and fall
+ * again. This flies pitched, then eases back to `settlePitch`, which is what
+ * produces the sweep.
+ *
+ * Resolves once the camera has settled, like {@link flyTo}. For a cut rather
+ * than a flight, use `flyTo` with `duration: 0`.
+ */
+export async function sweepTo(map: MapLibreMap, options: SweepToOptions): Promise<void> {
+	const {
+		sweepPitch = 45,
+		settlePitch = 0,
+		settleDuration = 900,
+		curve = 1.6,
+		speed = 0.9,
+		duration = 2600,
+		...rest
+	} = options;
+
+	await flyTo(map, { ...rest, curve, speed, duration, pitch: sweepPitch });
+
+	if (settleDuration <= 0) {
+		map.setPitch(settlePitch);
+		return;
+	}
+
+	map.easeTo({ pitch: settlePitch, duration: settleDuration, essential: options.essential ?? false });
+	await new Promise<void>((resolve) => map.once('moveend', () => resolve()));
+}
