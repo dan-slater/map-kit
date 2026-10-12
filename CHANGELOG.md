@@ -4,7 +4,7 @@ Consumed by git tag, so every release here is also a tag on `main`.
 
 ## Unreleased
 
-## 0.1.1
+## 0.1.1 (2026-10-12)
 
 Mostly additive, with one correction that matters: `coastlineNear` reported
 the wrong side for the water. The geometry is unchanged, but

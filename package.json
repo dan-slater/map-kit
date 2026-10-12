@@ -1,6 +1,6 @@
 {
   "name": "@dan-slater/map-kit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Svelte 5 components over MapLibre GL JS and OpenFreeMap vector tiles: globe map, pins, panel, toggle layers, and a canvas overlay registered to map coordinates.",
   "license": "MIT",
   "repository": {
